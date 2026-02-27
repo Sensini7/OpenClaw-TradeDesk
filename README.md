@@ -2,8 +2,6 @@
 
 A fully automated trading intelligence system built on [OpenClaw](https://openclaw.ai), using 6 specialized AI agents that coordinate through shared files on disk to produce daily forex/commodity trading signals delivered via Telegram.
 
-Built by [Axidion](https://axidion.org).
-
 ---
 
 ## Architecture
@@ -54,7 +52,7 @@ No APIs between agents. No message queues. No orchestration framework. **Just fi
 |-------|-------|-------------|------|
 | **Commander 👑** | Sonnet 4.5 | $3/$15 | Coordinator — talks to trader on Telegram, delegates to team, enforces quality |
 | **Scout 🔭** | Haiku 4.5 | $1/$5 | Market research — browses finviz, Yahoo Finance, Google Finance for live prices and news |
-| **Oracle 📊** | Sonnet 4.5 | $3/$15 | Strategy filter — matches intel against trader's 9 breakout-retest rules |
+| **Oracle 📊** | Sonnet 4.5 | $3/$15 | Strategy filter — matches intel against trader's configured strategy rules |
 | **Trigger ⚡** | Sonnet 4.5 | $3/$15 | Signal generator — creates exact entry/SL/TP levels with R:R calculations |
 | **Sentinel 🛡️** | Haiku 4.5 | $1/$5 | Risk manager — position sizing formulas, R:R filtering, daily loss limits |
 | **Herald 📲** | Haiku 4.5 | $1/$5 | Telegram reporter — formats briefing, sends private + academy versions |
@@ -155,17 +153,16 @@ Now every agent can read/write `intel/DAILY-INTEL.md` using a relative path from
 
 ### 3. Scout's Data Sources
 
-The original guide said "browse finviz.com" but didn't provide specific URLs for forex quotes. **Finviz only has stock/ETF quotes, not forex pairs.** Scout's SOUL.md now contains a 3-step data collection strategy:
+The original guide said "browse finviz.com" but didn't provide specific URLs for forex quotes. **Finviz only has stock/ETF quotes, not forex pairs.** Scout's `SOUL.md` now contains a 3-step data collection strategy. Adjust the URLs in `agents/scout/SOUL.md` to match your watchlist:
 
 **Step 1 — Prices (fetch FIRST):**
-- Gold: `https://finviz.com/quote.ashx?t=GLD` (GLD ETF as XAUUSD proxy)
-- DXY: `https://finviz.com/quote.ashx?t=UUP` (UUP ETF as DXY proxy)
-- Forex: `https://finance.yahoo.com/quote/EURUSD=X/` (and USDJPY=X, GBPUSD=X, etc.)
-- Fallbacks: `xe.com`, `google.com/finance/quote/EUR-USD`, `investing.com`
+- ETF proxies on Finviz (e.g. GLD for XAUUSD, UUP for DXY): `https://finviz.com/quote.ashx?t=TICKER`
+- Forex pairs via Yahoo Finance: `https://finance.yahoo.com/quote/EURUSD=X/`
+- Fallbacks: `xe.com`, `google.com/finance`, `investing.com`
 
 **Step 2 — News:** `https://finviz.com/news.ashx`
 
-**Step 3 — Calendar:** `https://www.forexfactory.com/calendar`
+**Step 3 — Economic Calendar:** `https://www.forexfactory.com/calendar`
 
 ### 4. Herald's Channel Enforcement
 
@@ -193,7 +190,7 @@ Herald produces two versions of the briefing:
 | Setup thesis | Yes | Yes |
 | Risk management reminders | Yes | Yes (emphasized) |
 
-The academy channel has ~19,686 subscribers — they see professional analysis without portfolio details.
+The public channel subscribers see professional analysis without portfolio details.
 
 ### 6. Position Sizing Formulas (Sentinel)
 
@@ -252,28 +249,39 @@ cd ~/.openclaw/workspace
 
 ### Step 3: Configure Credentials
 
+**Where keys live:** `~/.openclaw/openclaw.json` — this is the single source of truth for all secrets and agent configuration. It is **outside** the repo directory and is never committed.
+
 ```bash
 cp openclaw.json.example ~/.openclaw/openclaw.json
 nano ~/.openclaw/openclaw.json
 ```
 
-Replace these placeholders:
+Replace these placeholders in `~/.openclaw/openclaw.json`:
 
-| Placeholder | Replace With |
-|-------------|-------------|
-| `YOUR_KEY_HERE` | Anthropic API key (`sk-ant-api03-...`) |
-| `YOUR_BOT_TOKEN_HERE` | Bot token from @BotFather |
-| `YOUR_TELEGRAM_USER_ID` | Your numeric Telegram user ID |
+| Placeholder | Replace With | Where to get it |
+|-------------|-------------|-----------------|
+| `YOUR_KEY_HERE` | Anthropic API key (`sk-ant-api03-...`) | [console.anthropic.com](https://console.anthropic.com) |
+| `YOUR_BOT_TOKEN_HERE` | Telegram bot token | [@BotFather](https://t.me/BotFather) → `/newbot` |
+| `YOUR_TELEGRAM_USER_ID` | Your numeric Telegram user ID | [@userinfobot](https://t.me/userinfobot) |
+
+> **Tip:** The `openclaw.json.example` file in the repo root contains a fully annotated template with all fields documented. Use it as your reference when filling in `~/.openclaw/openclaw.json`.
 
 Also update the gateway auth token if needed (or keep the default).
 
 ### Step 4: Update Trader Profile
 
-Edit `USER.md` (master) and each `agents/*/USER.md` with your trader's:
+**Where profile data lives:** Two locations, both inside `~/.openclaw/workspace/`:
+
+| File | Purpose |
+|------|---------|
+| `USER.md` | Master profile — full account details, all instruments, all rules |
+| `agents/*/USER.md` | Scoped copies — each agent sees only the data relevant to its role |
+
+Edit both to match your setup:
 - Instruments and watchlist
 - Strategy rules
-- Risk parameters (account size, max risk %, etc.)
-- Telegram chat ID and channel ID
+- Risk parameters (account size, max risk %, daily loss limit, etc.)
+- Telegram chat ID (your personal) and channel ID (public, if applicable)
 - Signal format preferences
 
 ### Step 5: Create Intel Symlinks
@@ -375,33 +383,32 @@ Commander should respond identifying itself and listing all 5 sub-agents.
 
 Weekdays only (Mon-Fri). Staggered so each agent's output is ready before the next runs.
 
-| Agent | ET (EST) | UTC | WAT (Cameroon) | EDT (Mar-Nov) |
-|-------|----------|-----|-----------------|----------------|
-| Scout | 6:00 AM | 11:00 | 12:00 PM | 11:00 AM WAT |
-| Oracle | 6:15 AM | 11:15 | 12:15 PM | 11:15 AM WAT |
-| Trigger | 6:25 AM | 11:25 | 12:25 PM | 11:25 AM WAT |
-| Sentinel | 6:30 AM | 11:30 | 12:30 PM | 11:30 AM WAT |
-| Herald | 6:35 AM | 11:35 | 12:35 PM | 11:35 AM WAT |
+| Agent | ET (EST) | UTC | EDT (Mar-Nov) |
+|-------|----------|-----|----------------|
+| Scout | 6:00 AM | 11:00 | 7:00 AM |
+| Oracle | 6:15 AM | 11:15 | 7:15 AM |
+| Trigger | 6:25 AM | 11:25 | 7:25 AM |
+| Sentinel | 6:30 AM | 11:30 | 7:30 AM |
+| Herald | 6:35 AM | 11:35 | 7:35 AM |
 
-> When the US switches to EDT (March-November), Cameroon time shifts 1 hour earlier since UTC stays the same but ET moves to UTC-4.
+> Cron jobs are scheduled in UTC. When the US switches to EDT (March-November), ET moves to UTC-4 so local time shifts 1 hour earlier relative to UTC.
 
 ---
 
 ## Trader Profile
 
-Currently configured for a forex/commodities swing trader:
+The default configuration targets a forex/commodities swing trader. All profile data lives in `USER.md` files — one master and one scoped copy per agent.
 
-- **Channel**: @axidiontradedeskmvp (~19,686 subscribers)
-- **Academy**: FN Forex Academy (Douala & Buea, Cameroon + Dubai)
+Example defaults (replace these with your own):
+
 - **Primary Instrument**: XAUUSD (Gold)
 - **Watchlist**: USDJPY, EURUSD, GBPUSD, USDCAD, GBPJPY, AUDUSD
-- **Strategy**: Breakout-retest with trend confirmation (9 strict rules)
-- **Risk**: 1% per trade, 3% max daily loss, 3 max concurrent
+- **Strategy**: Breakout-retest with trend confirmation
+- **Risk**: 1% per trade, 3% max daily loss, 3 max concurrent positions
 - **R:R Target**: 1:4 to 1:6 on swings, 1:2 minimum intraday
-- **Broker**: Exness
-- **Signal Format**: `BUY GOLD SL: 4457 TP: 4474 TP2:4479` (variable punctuation)
+- **Signal Format**: `BUY GOLD SL: 3200 TP: 3230 TP2: 3250`
 
-To customize for a different trader, update `USER.md` (master) and each agent's scoped `agents/*/USER.md`.
+To customize for your own setup, update `USER.md` (master) and each agent's scoped `agents/*/USER.md`. See **Step 4** in the setup guide below.
 
 ---
 
@@ -415,7 +422,7 @@ Setup scripts used during initial configuration (in `scripts/`):
 | `update-config.py` | Registers 6 agents in openclaw.json with model assignments |
 | `fix-agents.py` | Adds MEMORY.md, IDENTITY.md, TOOLS.md for sub-agents (dashboard showed MISSING) |
 | `complete-agent-files.py` | Creates USER.md, HEARTBEAT.md, BOOTSTRAP.md — completing the 8-file set |
-| `populate-real-data.py` | Fills all USER.md files with real trader profile data from Supabase |
+| `populate-real-data.py` | Fills all USER.md files with real trader profile data |
 | `fix-tool-profiles.py` | Fixes minimal + alsoAllow permissions (Scout couldn't write files) |
 | `fix-tools-paths.py` | Updates TOOLS.md to use `intel/` (symlinked) instead of `../../intel/` |
 | `fix-scout-sources.py` | Adds Yahoo Finance, Google Finance, ForexFactory URLs for live forex quotes |
@@ -493,4 +500,4 @@ MIT
 
 ---
 
-**Built with [OpenClaw](https://openclaw.ai) + [Anthropic Claude](https://anthropic.com) by [Axidion](https://axidion.org)**
+**Built with [OpenClaw](https://openclaw.ai) + [Anthropic Claude](https://anthropic.com)**
