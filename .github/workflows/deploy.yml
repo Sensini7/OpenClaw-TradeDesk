@@ -1,0 +1,112 @@
+name: Deploy to VPS
+
+# Runs automatically on every push to main.
+# Secrets are injected over SSH — nothing sensitive ever touches the repo.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: # Allow manual trigger from GitHub Actions tab
+
+jobs:
+  deploy:
+    name: Deploy OpenClaw TradeDesk
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_USER_ID: ${{ secrets.TELEGRAM_USER_ID }}
+          # Optional — leave unset to keep the default gateway token from openclaw.json.example
+          OPENCLAW_GATEWAY_TOKEN: ${{ secrets.OPENCLAW_GATEWAY_TOKEN }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          # Pass env vars into the remote shell session
+          envs: ANTHROPIC_API_KEY,TELEGRAM_BOT_TOKEN,TELEGRAM_USER_ID,OPENCLAW_GATEWAY_TOKEN
+          timeout: 120s
+          script: |
+            set -e
+
+            WORKSPACE="$HOME/.openclaw/workspace"
+            CONFIG="$HOME/.openclaw/openclaw.json"
+
+            # ── 1. Verify OpenClaw is installed ─────────────────────────────────────
+            if ! command -v openclaw &>/dev/null; then
+              echo "ERROR: openclaw is not installed on this server."
+              echo "Run the following on your server, then re-trigger this workflow:"
+              echo "  curl -fsSL https://openclaw.ai/install.sh | bash"
+              echo "  openclaw onboard --install-daemon"
+              exit 1
+            fi
+
+            # ── 2. Clone or pull the workspace ──────────────────────────────────────
+            if [ -d "$WORKSPACE/.git" ]; then
+              echo "==> Pulling latest changes into workspace..."
+              git -C "$WORKSPACE" pull origin main
+            else
+              echo "==> Cloning repo into $WORKSPACE..."
+              # Back up any existing (non-git) workspace so nothing is silently lost
+              if [ -d "$WORKSPACE" ]; then
+                BACKUP="${WORKSPACE}-backup-$(date +%Y%m%d%H%M%S)"
+                echo "    Existing workspace moved to: $BACKUP"
+                mv "$WORKSPACE" "$BACKUP"
+              fi
+              git clone https://github.com/Sensini7/OpenClaw-TradeDesk.git "$WORKSPACE"
+            fi
+
+            # ── 3. Inject secrets into ~/.openclaw/openclaw.json ────────────────────
+            # Always regenerate from the template so structural changes in the repo
+            # are picked up. Secrets are never stored in the repo — only injected here.
+            echo "==> Writing $CONFIG from template..."
+            mkdir -p "$HOME/.openclaw"
+            cp "$WORKSPACE/openclaw.json.example" "$CONFIG"
+
+            sed -i "s|YOUR_KEY_HERE|${ANTHROPIC_API_KEY}|g"        "$CONFIG"
+            sed -i "s|YOUR_BOT_TOKEN_HERE|${TELEGRAM_BOT_TOKEN}|g"  "$CONFIG"
+            sed -i "s|YOUR_TELEGRAM_USER_ID|${TELEGRAM_USER_ID}|g"  "$CONFIG"
+
+            # Replace gateway token only if the secret is set (otherwise keep default)
+            if [ -n "${OPENCLAW_GATEWAY_TOKEN}" ]; then
+              sed -i "s|4bbaf7385f68a2d6914bdf661a52403ca213d2fd018ecbab|${OPENCLAW_GATEWAY_TOKEN}|g" "$CONFIG"
+            fi
+
+            # Fix workspace paths in config if running as a non-root user
+            if [ "$HOME" != "/root" ]; then
+              sed -i "s|/root/.openclaw/workspace|$HOME/.openclaw/workspace|g" "$CONFIG"
+            fi
+
+            echo "==> Secrets injected into openclaw.json."
+
+            # ── 4. Create intel/ symlinks (idempotent) ──────────────────────────────
+            # Each agent workspace must have intel/ symlinked so agents can
+            # read/write pipeline files without stepping outside their workspace.
+            echo "==> Creating intel symlinks..."
+            for agent in scout oracle trigger sentinel herald; do
+              ln -sf "$WORKSPACE/intel" "$WORKSPACE/agents/$agent/intel"
+              echo "    agents/$agent/intel -> $WORKSPACE/intel"
+            done
+
+            # ── 5. Restart OpenClaw gateway ─────────────────────────────────────────
+            echo "==> Restarting OpenClaw gateway..."
+            openclaw gateway restart
+
+            # ── 6. Health checks ────────────────────────────────────────────────────
+            echo "==> Waiting for gateway to be ready..."
+            sleep 5
+
+            echo "--- Gateway status ---"
+            openclaw gateway status
+
+            echo "--- Agent list ---"
+            openclaw agents list
+
+            echo ""
+            echo "Deployment complete."
