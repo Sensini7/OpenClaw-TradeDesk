@@ -25,13 +25,17 @@ jobs:
           TELEGRAM_USER_ID: ${{ secrets.TELEGRAM_USER_ID }}
           # Optional — leave unset to keep the default gateway token from openclaw.json.example
           OPENCLAW_GATEWAY_TOKEN: ${{ secrets.OPENCLAW_GATEWAY_TOKEN }}
+          # Optional — override the domain used for the nginx TLS proxy (defaults to `hostname -f`)
+          OPENCLAW_DOMAIN: ${{ secrets.OPENCLAW_DOMAIN }}
+          # Optional — email for Let's Encrypt expiry notices; omit to register without email
+          OPENCLAW_CERTBOT_EMAIL: ${{ secrets.OPENCLAW_CERTBOT_EMAIL }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           # Pass env vars into the remote shell session
-          envs: ANTHROPIC_API_KEY,TELEGRAM_BOT_TOKEN,TELEGRAM_USER_ID,OPENCLAW_GATEWAY_TOKEN
+          envs: ANTHROPIC_API_KEY,TELEGRAM_BOT_TOKEN,TELEGRAM_USER_ID,OPENCLAW_GATEWAY_TOKEN,OPENCLAW_DOMAIN,OPENCLAW_CERTBOT_EMAIL
           timeout: 300s
           script: |
             set -e
@@ -183,7 +187,91 @@ jobs:
               }
             fi
 
-            # ── 6. Health checks ────────────────────────────────────────────────────
+            # ── 6. Set up nginx HTTPS reverse proxy ─────────────────────────────────
+            # Browsers block crypto.subtle (required for Control UI device identity)
+            # over plain HTTP on non-localhost origins.  nginx terminates TLS so the
+            # dashboard works without a VPN or SSH tunnel.
+            #
+            # Flow:
+            #   a) Write a baseline HTTP nginx config
+            #   b) Run certbot --nginx to get a Let's Encrypt cert (idempotent)
+            #   c) If Let's Encrypt fails, fall back to a self-signed cert
+            #   d) Replace dangerouslyAllowHostHeaderOriginFallback with explicit
+            #      allowedOrigins and restart the gateway
+            DOMAIN="${OPENCLAW_DOMAIN:-$(hostname -f)}"
+            NGINX_CONF=/etc/nginx/sites-available/openclaw
+            echo "==> Setting up nginx HTTPS proxy for $DOMAIN..."
+
+            # Install nginx + certbot if absent (idempotent)
+            command -v nginx   &>/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nginx
+            command -v certbot &>/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq certbot python3-certbot-nginx
+
+            # Write baseline HTTP config; certbot will upgrade it to HTTPS in-place.
+            # On re-deploys the baseline is re-written and certbot re-adds SSL.
+            {
+              echo "server {"
+              echo "    listen 80;"
+              echo "    server_name $DOMAIN;"
+              echo "    location / {"
+              echo "        proxy_pass http://127.0.0.1:18789;"
+              echo "        proxy_http_version 1.1;"
+              echo '        proxy_set_header Upgrade $http_upgrade;'
+              echo '        proxy_set_header Connection "upgrade";'
+              echo '        proxy_set_header Host $host;'
+              echo '        proxy_set_header X-Real-IP $remote_addr;'
+              echo "    }"
+              echo "}"
+            } > "$NGINX_CONF"
+            ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/openclaw
+            rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
+            nginx -t && { systemctl is-active nginx &>/dev/null && systemctl reload nginx || systemctl start nginx; }
+
+            # Obtain / renew TLS cert from Let's Encrypt
+            CERTBOT_EMAIL_FLAG="--register-unsafely-without-email"
+            [ -n "${OPENCLAW_CERTBOT_EMAIL:-}" ] && CERTBOT_EMAIL_FLAG="--email ${OPENCLAW_CERTBOT_EMAIL}"
+            TLS_OK=false
+            if certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos \
+                 $CERTBOT_EMAIL_FLAG --redirect 2>&1; then
+              TLS_OK=true
+              echo "    TLS certificate configured via Let's Encrypt."
+            else
+              echo "    WARNING: Let's Encrypt failed (port 80 blocked, DNS mismatch, or rate-limited)."
+              echo "    Falling back to self-signed certificate."
+              openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+                -keyout /etc/ssl/private/openclaw-selfsigned.key \
+                -out /etc/ssl/certs/openclaw-selfsigned.crt \
+                -subj "/CN=$DOMAIN" 2>/dev/null
+              {
+                echo "server {"
+                echo "    listen 80; server_name $DOMAIN;"
+                echo "    return 301 https://\$host\$request_uri;"
+                echo "}"
+                echo "server {"
+                echo "    listen 443 ssl; server_name $DOMAIN;"
+                echo "    ssl_certificate /etc/ssl/certs/openclaw-selfsigned.crt;"
+                echo "    ssl_certificate_key /etc/ssl/private/openclaw-selfsigned.key;"
+                echo "    location / {"
+                echo "        proxy_pass http://127.0.0.1:18789;"
+                echo "        proxy_http_version 1.1;"
+                echo '        proxy_set_header Upgrade $http_upgrade;'
+                echo '        proxy_set_header Connection "upgrade";'
+                echo '        proxy_set_header Host $host;'
+                echo '        proxy_set_header X-Real-IP $remote_addr;'
+                echo "    }"
+                echo "}"
+              } > "$NGINX_CONF"
+              nginx -t && systemctl reload nginx
+              TLS_OK=true
+            fi
+
+            # Replace the interim dangerouslyAllowHostHeaderOriginFallback flag with
+            # an explicit allowedOrigins list now that HTTPS + domain are confirmed.
+            HTTPS_ORIGIN="https://$DOMAIN"
+            python3 -c "import json; cfg='$CONFIG'; d=json.load(open(cfg)); gw=d.setdefault('gateway',{}); cui=gw.setdefault('controlUi',{}); cui['allowedOrigins']=['$HTTPS_ORIGIN']; cui.pop('dangerouslyAllowHostHeaderOriginFallback',None); open(cfg,'w').write(json.dumps(d,indent=2)); print('    controlUi.allowedOrigins set, dangerouslyAllowHostHeaderOriginFallback removed.')"
+            openclaw gateway restart 2>/dev/null || true
+            echo "==> nginx ready. Dashboard: https://$DOMAIN/"
+
+            # ── 7. Health checks ────────────────────────────────────────────────────
             echo "==> Waiting for gateway to be ready..."
             sleep 5
 
@@ -195,3 +283,4 @@ jobs:
 
             echo ""
             echo "Deployment complete."
+            echo "Open: https://$DOMAIN/"
