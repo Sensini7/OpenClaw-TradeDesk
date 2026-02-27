@@ -7,6 +7,7 @@ on:
   push:
     branches:
       - main
+      - claude/genericize-readme-BrYAW  # temp: remove after merging to main
   workflow_dispatch: # Allow manual trigger from GitHub Actions tab
 
 jobs:
