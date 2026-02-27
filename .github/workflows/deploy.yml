@@ -156,15 +156,7 @@ jobs:
                 "$CONFIG" > "$tmp" && mv "$tmp" "$CONFIG"
               echo "    Gateway config enforced (bind=lan, auth=token) via jq."
             elif command -v python3 &>/dev/null; then
-              python3 -c "
-import json, sys
-cfg, tok = sys.argv[1], sys.argv[2]
-with open(cfg) as f: d = json.load(f)
-d.setdefault('gateway', {})['bind'] = 'lan'
-d['gateway']['auth'] = {'mode': 'token', 'token': tok}
-with open(cfg, 'w') as f: json.dump(d, f, indent=2)
-print('    Gateway config enforced (bind=lan, auth=token) via python3.')
-" "$CONFIG" "$GW_TOKEN"
+              python3 -c "import json,sys; cfg,tok=sys.argv[1],sys.argv[2]; d=json.load(open(cfg)); d.setdefault('gateway',{})['bind']='lan'; d['gateway']['auth']={'mode':'token','token':tok}; open(cfg,'w').write(json.dumps(d,indent=2)); print('    Gateway config enforced (bind=lan, auth=token) via python3.')" "$CONFIG" "$GW_TOKEN"
             else
               echo "WARNING: neither jq nor python3 found — gateway bind NOT enforced. Install jq on the VPS."
               exit 1
