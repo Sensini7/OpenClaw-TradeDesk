@@ -7,6 +7,7 @@ on:
   push:
     branches:
       - main
+      - claude/genericize-readme-BrYAW  # temp: remove after merging to main
   workflow_dispatch: # Allow manual trigger from GitHub Actions tab
 
 jobs:
@@ -41,10 +42,10 @@ jobs:
             # ── 0. Bootstrap PATH (nvm / local bins) ────────────────────────────────
             # OpenClaw is Node.js-based and may be installed via nvm or npm global.
             # SSH sessions don't load .bashrc, so we source nvm manually.
-            # openclaw >=2026.x requires Node >=22 — activate it explicitly.
+            # openclaw >=2026.x requires Node >=22 — install it if missing (idempotent).
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-            nvm use 22 2>/dev/null || nvm use --lts 2>/dev/null || true
+            nvm install 22 2>/dev/null && nvm alias default 22 2>/dev/null || true
             export PATH="$HOME/.local/bin:$HOME/.npm/bin:/usr/local/bin:$PATH"
 
             # ── 1. Clone or pull the workspace ──────────────────────────────────────
@@ -63,14 +64,17 @@ jobs:
               git clone https://github.com/Sensini7/OpenClaw-TradeDesk.git "$WORKSPACE"
             fi
 
-            # ── 2. Inject secrets into ~/.openclaw/openclaw.json ────────────────────
+            # ── 2. Inject secrets into openclaw config files ─────────────────────────
             # Done BEFORE installing OpenClaw so the installer finds a pre-existing
             # config and skips the interactive onboarding wizard (no TTY in CI).
+            #
+            # IMPORTANT: auth.profiles in openclaw.json is METADATA ONLY (provider +
+            # mode). The actual API key must be written to auth-profiles.json, which
+            # openclaw reads separately. Do NOT put the API key inside openclaw.json.
             echo "==> Writing $CONFIG from template..."
             mkdir -p "$HOME/.openclaw"
             cp "$WORKSPACE/openclaw.json.example" "$CONFIG"
 
-            sed -i "s|YOUR_KEY_HERE|${ANTHROPIC_API_KEY}|g"        "$CONFIG"
             sed -i "s|YOUR_BOT_TOKEN_HERE|${TELEGRAM_BOT_TOKEN}|g"  "$CONFIG"
             sed -i "s|YOUR_TELEGRAM_USER_ID|${TELEGRAM_USER_ID}|g"  "$CONFIG"
 
@@ -84,19 +88,35 @@ jobs:
               sed -i "s|/root/.openclaw/workspace|$HOME/.openclaw/workspace|g" "$CONFIG"
             fi
 
-            echo "==> Secrets injected into openclaw.json."
+            # Write the actual API key to auth-profiles.json (separate from openclaw.json)
+            # openclaw reads this file to resolve the "default" api_key profile.
+            cat > "$HOME/.openclaw/auth-profiles.json" <<AUTHEOF
+{
+  "default": {
+    "apiKey": "${ANTHROPIC_API_KEY}"
+  }
+}
+AUTHEOF
+
+            echo "==> Config and auth-profiles.json written."
 
             # ── 3. Install OpenClaw if not present ──────────────────────────────────
             # CI=1 tells the installer to run non-interactively.
-            # The pre-written openclaw.json above means the installer has no reason
-            # to prompt for credentials even if CI detection is incomplete.
+            # The pre-written openclaw.json above means the installer skips the
+            # interactive onboarding wizard.
+            #
+            # NOTE: The install.sh "Finalizing setup" step runs `openclaw` internally
+            # and will exit 1 in no-TTY CI environments (/dev/tty unavailable).
+            # The npm package itself is fully installed before that step — so we run
+            # the installer in a subshell, suppress its exit code, then verify the
+            # binary exists independently.
             if ! command -v openclaw &>/dev/null; then
               echo "==> OpenClaw not found — installing..."
-              CI=1 curl -fsSL https://openclaw.ai/install.sh | bash
+              ( curl -fsSL https://openclaw.ai/install.sh | CI=1 bash ) 2>&1 || true
 
-              # Re-source nvm, switch to Node 22, and set it as the default
+              # Re-source nvm so the newly installed bin/ is on PATH
               [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-              nvm use 22 && nvm alias default 22
+              nvm use 22 2>/dev/null || true
               export PATH="$HOME/.local/bin:$HOME/.npm/bin:/usr/local/bin:$PATH"
 
               if ! command -v openclaw &>/dev/null; then
@@ -117,22 +137,29 @@ jobs:
               echo "    agents/$agent/intel -> $WORKSPACE/intel"
             done
 
+            # ── 4.5. Migrate config to current schema ───────────────────────────────
+            # doctor --fix auto-migrates stale fields (e.g. streaming boolean → enum,
+            # missing telegram.enabled). Must run after openclaw is installed.
+            echo "==> Running openclaw doctor --fix to migrate config..."
+            openclaw doctor --fix 2>&1 || true
+
             # ── 5. Start/restart OpenClaw gateway ───────────────────────────────────
-            # On first deploy the gateway may not be registered as a systemd daemon yet.
-            # We try restart first (fast path for subsequent deploys), then fall back
-            # to install-daemon which registers the service and starts it.
+            # 'openclaw gateway restart' exits 0 even when the service is disabled
+            # ("Gateway service disabled.") so we cannot rely on its exit code.
+            # Instead: always ensure the daemon is installed first (idempotent),
+            # then restart. The install step is a no-op when already installed.
             echo "==> Starting OpenClaw gateway..."
+            openclaw gateway install 2>/dev/null || \
+              openclaw gateway install-daemon 2>/dev/null || true
+
             if openclaw gateway restart 2>/dev/null; then
               echo "    Gateway restarted."
             else
-              echo "    Gateway not registered yet — running first-time daemon setup..."
-              CI=1 openclaw onboard --install-daemon 2>/dev/null || \
-                openclaw gateway install-daemon 2>/dev/null || \
-                openclaw gateway start 2>/dev/null || {
-                  echo "ERROR: Could not start the OpenClaw gateway."
-                  echo "SSH into the server and run: openclaw onboard --install-daemon"
-                  exit 1
-                }
+              openclaw gateway start 2>/dev/null || {
+                echo "ERROR: Could not start the OpenClaw gateway."
+                echo "SSH into the server and run: openclaw gateway install && openclaw gateway start"
+                exit 1
+              }
             fi
 
             # ── 6. Health checks ────────────────────────────────────────────────────
