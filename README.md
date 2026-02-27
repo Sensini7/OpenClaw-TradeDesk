@@ -494,12 +494,7 @@ The workflow file is at `.github/workflows/deploy.yml`.
 
 ### Prerequisites on the VPS
 
-Before the first deploy, install OpenClaw on your server:
-
-```bash
-curl -fsSL https://openclaw.ai/install.sh | bash
-openclaw onboard --install-daemon
-```
+The workflow handles OpenClaw installation automatically — no manual setup needed on the server before the first deploy.
 
 ### One-Time SSH Key Setup
 

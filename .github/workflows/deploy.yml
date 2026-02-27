@@ -31,20 +31,36 @@ jobs:
           port: 22
           # Pass env vars into the remote shell session
           envs: ANTHROPIC_API_KEY,TELEGRAM_BOT_TOKEN,TELEGRAM_USER_ID,OPENCLAW_GATEWAY_TOKEN
-          timeout: 120s
+          timeout: 300s
           script: |
             set -e
 
             WORKSPACE="$HOME/.openclaw/workspace"
             CONFIG="$HOME/.openclaw/openclaw.json"
 
-            # ── 1. Verify OpenClaw is installed ─────────────────────────────────────
+            # ── 0. Bootstrap PATH (nvm / local bins) ────────────────────────────────
+            # OpenClaw is Node.js-based and may be installed via nvm or npm global.
+            # SSH sessions don't load .bashrc, so we source nvm manually.
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            export PATH="$HOME/.local/bin:$HOME/.npm/bin:/usr/local/bin:$PATH"
+
+            # ── 1. Install OpenClaw if not present ──────────────────────────────────
             if ! command -v openclaw &>/dev/null; then
-              echo "ERROR: openclaw is not installed on this server."
-              echo "Run the following on your server, then re-trigger this workflow:"
-              echo "  curl -fsSL https://openclaw.ai/install.sh | bash"
-              echo "  openclaw onboard --install-daemon"
-              exit 1
+              echo "==> OpenClaw not found — installing..."
+              curl -fsSL https://openclaw.ai/install.sh | bash
+
+              # Re-source nvm and PATH in case the installer added new entries
+              [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+              export PATH="$HOME/.local/bin:$HOME/.npm/bin:/usr/local/bin:$PATH"
+
+              if ! command -v openclaw &>/dev/null; then
+                echo "ERROR: OpenClaw installation failed — binary not found after install."
+                exit 1
+              fi
+              echo "==> OpenClaw installed: $(openclaw --version 2>/dev/null || echo 'version unknown')"
+            else
+              echo "==> OpenClaw already installed: $(openclaw --version 2>/dev/null || echo 'version unknown')"
             fi
 
             # ── 2. Clone or pull the workspace ──────────────────────────────────────
@@ -94,9 +110,23 @@ jobs:
               echo "    agents/$agent/intel -> $WORKSPACE/intel"
             done
 
-            # ── 5. Restart OpenClaw gateway ─────────────────────────────────────────
-            echo "==> Restarting OpenClaw gateway..."
-            openclaw gateway restart
+            # ── 5. Start/restart OpenClaw gateway ───────────────────────────────────
+            # On first deploy the gateway may not be registered as a systemd daemon yet.
+            # We try restart first (fast path for subsequent deploys), then fall back
+            # to install-daemon which registers the service and starts it.
+            echo "==> Starting OpenClaw gateway..."
+            if openclaw gateway restart 2>/dev/null; then
+              echo "    Gateway restarted."
+            else
+              echo "    Gateway not registered yet — running first-time daemon setup..."
+              openclaw onboard --install-daemon --yes 2>/dev/null || \
+                openclaw gateway install-daemon 2>/dev/null || \
+                openclaw gateway start 2>/dev/null || {
+                  echo "ERROR: Could not start the OpenClaw gateway."
+                  echo "SSH into the server and run: openclaw onboard --install-daemon"
+                  exit 1
+                }
+            fi
 
             # ── 6. Health checks ────────────────────────────────────────────────────
             echo "==> Waiting for gateway to be ready..."
