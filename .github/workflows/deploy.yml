@@ -202,7 +202,6 @@ jobs:
             #   3. <public-ip>.nip.io — free wildcard DNS that resolves <ip>.nip.io
             #      to <ip>; lets Let's Encrypt verify without any domain registration.
             #      Needed when the VPS hostname is PTR-only (no forward A record).
-            DOMAIN="${OPENCLAW_DOMAIN:-$(hostname -f)}"
             NGINX_CONF=/etc/nginx/sites-available/openclaw
             echo "==> Setting up nginx HTTPS proxy..."
 
@@ -210,14 +209,24 @@ jobs:
             command -v nginx   &>/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nginx
             command -v certbot &>/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq certbot python3-certbot-nginx
 
-            # If no custom domain is set and the hostname has no public A record
-            # (PTR-only hostnames are common on VPS providers), fall back to nip.io.
-            if [ -z "${OPENCLAW_DOMAIN:-}" ] && ! getent hosts "$DOMAIN" &>/dev/null; then
+            # Domain strategy:
+            #   - If OPENCLAW_DOMAIN secret is set, use it as-is.
+            #   - Otherwise always use <public-ip>.nip.io. VPS provider hostnames
+            #     (e.g. vps1234.provider.net) typically exist only in /etc/hosts /
+            #     PTR records and have no public A record, so Let's Encrypt would
+            #     fail. nip.io is a free wildcard DNS service that always resolves
+            #     <ip>.nip.io to <ip>, so Let's Encrypt HTTP-01 always succeeds.
+            #     'getent hosts' is intentionally NOT used because it checks
+            #     /etc/hosts first and would incorrectly return success for
+            #     provider-assigned hostnames that have no public DNS entry.
+            if [ -n "${OPENCLAW_DOMAIN:-}" ]; then
+              DOMAIN="$OPENCLAW_DOMAIN"
+            else
               PUBLIC_IP=$(curl -4s --connect-timeout 5 ifconfig.me 2>/dev/null \
                 || curl -4s --connect-timeout 5 icanhazip.com 2>/dev/null \
                 || hostname -I | awk '{print $1}')
               DOMAIN="${PUBLIC_IP}.nip.io"
-              echo "    hostname has no A record — using $DOMAIN (nip.io wildcard)."
+              echo "    No OPENCLAW_DOMAIN set — using $DOMAIN (nip.io wildcard)."
             fi
             echo "    Domain: $DOMAIN"
 
