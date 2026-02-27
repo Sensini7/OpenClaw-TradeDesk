@@ -90,7 +90,16 @@ jobs:
 
             # Write the actual API key to auth-profiles.json (separate from openclaw.json)
             # openclaw reads this file to resolve the "default" api_key profile.
-            printf '{\n  "default": {\n    "apiKey": "%s"\n  }\n}\n' "${ANTHROPIC_API_KEY}" > "$HOME/.openclaw/auth-profiles.json"
+            # Must be present in BOTH the main dir AND each agent's own dir —
+            # agents look in their own agentDir first and fall back to the main dir
+            # only if configured to do so; copying to all dirs is the safe default.
+            AUTH_JSON="$HOME/.openclaw/auth-profiles.json"
+            printf '{\n  "default": {\n    "apiKey": "%s"\n  }\n}\n' "${ANTHROPIC_API_KEY}" > "$AUTH_JSON"
+            for agent in commander scout oracle trigger sentinel herald; do
+              agent_dir="$HOME/.openclaw/agents/$agent/agent"
+              mkdir -p "$agent_dir"
+              cp "$AUTH_JSON" "$agent_dir/auth-profiles.json"
+            done
 
             echo "==> Config and auth-profiles.json written."
 
