@@ -13,7 +13,9 @@
     "enabled": true
   },
   "auth": {
-    "profiles": "YOUR_KEY_HERE"
+    "profiles": {
+      "default": "YOUR_KEY_HERE"
+    }
   },
   "agents": {
     "defaults": {

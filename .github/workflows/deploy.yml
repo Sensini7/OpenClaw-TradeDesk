@@ -41,8 +41,10 @@ jobs:
             # ── 0. Bootstrap PATH (nvm / local bins) ────────────────────────────────
             # OpenClaw is Node.js-based and may be installed via nvm or npm global.
             # SSH sessions don't load .bashrc, so we source nvm manually.
+            # openclaw >=2026.x requires Node >=22 — activate it explicitly.
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            nvm use 22 2>/dev/null || nvm use --lts 2>/dev/null || true
             export PATH="$HOME/.local/bin:$HOME/.npm/bin:/usr/local/bin:$PATH"
 
             # ── 1. Clone or pull the workspace ──────────────────────────────────────
@@ -92,8 +94,9 @@ jobs:
               echo "==> OpenClaw not found — installing..."
               CI=1 curl -fsSL https://openclaw.ai/install.sh | bash
 
-              # Re-source nvm and PATH in case the installer added new entries
+              # Re-source nvm, switch to Node 22, and set it as the default
               [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+              nvm use 22 && nvm alias default 22
               export PATH="$HOME/.local/bin:$HOME/.npm/bin:/usr/local/bin:$PATH"
 
               if ! command -v openclaw &>/dev/null; then
