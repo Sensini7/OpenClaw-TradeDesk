@@ -153,20 +153,26 @@ jobs:
             # Enforce gateway config after doctor (doctor may reset these fields).
             #
             # bind=loopback: gateway listens on 127.0.0.1 only; nginx proxies from
-            #   outside. Loopback connections are auto-approved for device pairing,
-            #   which avoids the "pairing required" prompt in the Control UI.
-            # trustedProxies: tells the gateway that nginx (127.0.0.1) is a trusted
-            #   reverse proxy so it forwards the real client IP correctly.
+            #   outside. When bind=loopback and trustedProxies is NOT set, the
+            #   gateway sees every connection as coming from 127.0.0.1 (nginx).
+            #   OpenClaw auto-approves device pairing for loopback clients, so the
+            #   "pairing required" prompt in the Control UI is bypassed automatically.
+            #
+            # DO NOT set trustedProxies here. trustedProxies instructs the gateway
+            #   to read X-Real-IP / X-Forwarded-For and use the browser's external IP
+            #   as the "real" client address — which is not loopback, which re-enables
+            #   the pairing prompt and locks users out of the Control UI.
+            #
             # allowedOrigins is set later in step 6 once the HTTPS domain is known.
             GW_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-4bbaf7385f68a2d6914bdf661a52403ca213d2fd018ecbab}"
             if command -v jq &>/dev/null; then
               tmp=$(mktemp)
               jq --arg t "$GW_TOKEN" \
-                '.gateway.bind = "loopback" | .gateway.trustedProxies = ["127.0.0.1"] | .gateway.auth = {"mode":"token","token":$t} | del(.gateway.controlUi.dangerouslyAllowHostHeaderOriginFallback)' \
+                '.gateway.bind = "loopback" | del(.gateway.trustedProxies) | .gateway.auth = {"mode":"token","token":$t} | del(.gateway.controlUi.dangerouslyAllowHostHeaderOriginFallback)' \
                 "$CONFIG" > "$tmp" && mv "$tmp" "$CONFIG"
-              echo "    Gateway config enforced (bind=loopback, trustedProxies, auth=token) via jq."
+              echo "    Gateway config enforced (bind=loopback, auth=token) via jq."
             elif command -v python3 &>/dev/null; then
-              python3 -c "import json,sys; cfg,tok=sys.argv[1],sys.argv[2]; d=json.load(open(cfg)); gw=d.setdefault('gateway',{}); gw['bind']='loopback'; gw['trustedProxies']=['127.0.0.1']; gw['auth']={'mode':'token','token':tok}; gw.setdefault('controlUi',{}).pop('dangerouslyAllowHostHeaderOriginFallback',None); open(cfg,'w').write(json.dumps(d,indent=2)); print('    Gateway config enforced (bind=loopback, trustedProxies, auth=token) via python3.')" "$CONFIG" "$GW_TOKEN"
+              python3 -c "import json,sys; cfg,tok=sys.argv[1],sys.argv[2]; d=json.load(open(cfg)); gw=d.setdefault('gateway',{}); gw['bind']='loopback'; gw.pop('trustedProxies',None); gw['auth']={'mode':'token','token':tok}; gw.setdefault('controlUi',{}).pop('dangerouslyAllowHostHeaderOriginFallback',None); open(cfg,'w').write(json.dumps(d,indent=2)); print('    Gateway config enforced (bind=loopback, auth=token) via python3.')" "$CONFIG" "$GW_TOKEN"
             else
               echo "WARNING: neither jq nor python3 found — gateway config NOT enforced. Install jq on the VPS."
               exit 1
