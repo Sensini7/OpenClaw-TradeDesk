@@ -146,17 +146,19 @@ jobs:
             echo "==> Running openclaw doctor --fix to migrate config..."
             openclaw doctor --fix 2>&1 || true
 
-            # Enforce gateway bind=lan and auth token after doctor
-            # (doctor may reset bind to loopback or strip the auth section)
+            # Enforce gateway bind=lan, auth token, and controlUi origin fallback after doctor.
+            # (doctor may reset bind to loopback or strip the auth/controlUi sections)
+            # dangerouslyAllowHostHeaderOriginFallback=true is required when bind=lan and
+            # no explicit allowedOrigins are set; without it the gateway refuses to start.
             GW_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-4bbaf7385f68a2d6914bdf661a52403ca213d2fd018ecbab}"
             if command -v jq &>/dev/null; then
               tmp=$(mktemp)
               jq --arg t "$GW_TOKEN" \
-                '.gateway.bind = "lan" | .gateway.auth = {"mode":"token","token":$t}' \
+                '.gateway.bind = "lan" | .gateway.auth = {"mode":"token","token":$t} | .gateway.controlUi.dangerouslyAllowHostHeaderOriginFallback = true' \
                 "$CONFIG" > "$tmp" && mv "$tmp" "$CONFIG"
-              echo "    Gateway config enforced (bind=lan, auth=token) via jq."
+              echo "    Gateway config enforced (bind=lan, auth=token, controlUi fallback) via jq."
             elif command -v python3 &>/dev/null; then
-              python3 -c "import json,sys; cfg,tok=sys.argv[1],sys.argv[2]; d=json.load(open(cfg)); d.setdefault('gateway',{})['bind']='lan'; d['gateway']['auth']={'mode':'token','token':tok}; open(cfg,'w').write(json.dumps(d,indent=2)); print('    Gateway config enforced (bind=lan, auth=token) via python3.')" "$CONFIG" "$GW_TOKEN"
+              python3 -c "import json,sys; cfg,tok=sys.argv[1],sys.argv[2]; d=json.load(open(cfg)); gw=d.setdefault('gateway',{}); gw['bind']='lan'; gw['auth']={'mode':'token','token':tok}; gw.setdefault('controlUi',{})['dangerouslyAllowHostHeaderOriginFallback']=True; open(cfg,'w').write(json.dumps(d,indent=2)); print('    Gateway config enforced (bind=lan, auth=token, controlUi fallback) via python3.')" "$CONFIG" "$GW_TOKEN"
             else
               echo "WARNING: neither jq nor python3 found — gateway bind NOT enforced. Install jq on the VPS."
               exit 1
