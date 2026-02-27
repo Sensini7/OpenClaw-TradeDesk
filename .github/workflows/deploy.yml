@@ -63,14 +63,17 @@ jobs:
               git clone https://github.com/Sensini7/OpenClaw-TradeDesk.git "$WORKSPACE"
             fi
 
-            # ── 2. Inject secrets into ~/.openclaw/openclaw.json ────────────────────
+            # ── 2. Inject secrets into openclaw config files ─────────────────────────
             # Done BEFORE installing OpenClaw so the installer finds a pre-existing
             # config and skips the interactive onboarding wizard (no TTY in CI).
+            #
+            # IMPORTANT: auth.profiles in openclaw.json is METADATA ONLY (provider +
+            # mode). The actual API key must be written to auth-profiles.json, which
+            # openclaw reads separately. Do NOT put the API key inside openclaw.json.
             echo "==> Writing $CONFIG from template..."
             mkdir -p "$HOME/.openclaw"
             cp "$WORKSPACE/openclaw.json.example" "$CONFIG"
 
-            sed -i "s|YOUR_KEY_HERE|${ANTHROPIC_API_KEY}|g"        "$CONFIG"
             sed -i "s|YOUR_BOT_TOKEN_HERE|${TELEGRAM_BOT_TOKEN}|g"  "$CONFIG"
             sed -i "s|YOUR_TELEGRAM_USER_ID|${TELEGRAM_USER_ID}|g"  "$CONFIG"
 
@@ -84,7 +87,17 @@ jobs:
               sed -i "s|/root/.openclaw/workspace|$HOME/.openclaw/workspace|g" "$CONFIG"
             fi
 
-            echo "==> Secrets injected into openclaw.json."
+            # Write the actual API key to auth-profiles.json (separate from openclaw.json)
+            # openclaw reads this file to resolve the "default" api_key profile.
+            cat > "$HOME/.openclaw/auth-profiles.json" <<AUTHEOF
+{
+  "default": {
+    "apiKey": "${ANTHROPIC_API_KEY}"
+  }
+}
+AUTHEOF
+
+            echo "==> Config and auth-profiles.json written."
 
             # ── 3. Install OpenClaw if not present ──────────────────────────────────
             # CI=1 tells the installer to run non-interactively.
@@ -123,22 +136,29 @@ jobs:
               echo "    agents/$agent/intel -> $WORKSPACE/intel"
             done
 
+            # ── 4.5. Migrate config to current schema ───────────────────────────────
+            # doctor --fix auto-migrates stale fields (e.g. streaming boolean → enum,
+            # missing telegram.enabled). Must run after openclaw is installed.
+            echo "==> Running openclaw doctor --fix to migrate config..."
+            openclaw doctor --fix 2>&1 || true
+
             # ── 5. Start/restart OpenClaw gateway ───────────────────────────────────
-            # On first deploy the gateway may not be registered as a systemd daemon yet.
-            # We try restart first (fast path for subsequent deploys), then fall back
-            # to install-daemon which registers the service and starts it.
+            # 'openclaw gateway restart' exits 0 even when the service is disabled
+            # ("Gateway service disabled.") so we cannot rely on its exit code.
+            # Instead: always ensure the daemon is installed first (idempotent),
+            # then restart. The install step is a no-op when already installed.
             echo "==> Starting OpenClaw gateway..."
+            openclaw gateway install 2>/dev/null || \
+              openclaw gateway install-daemon 2>/dev/null || true
+
             if openclaw gateway restart 2>/dev/null; then
               echo "    Gateway restarted."
             else
-              echo "    Gateway not registered yet — running first-time daemon setup..."
-              CI=1 openclaw onboard --install-daemon 2>/dev/null || \
-                openclaw gateway install-daemon 2>/dev/null || \
-                openclaw gateway start 2>/dev/null || {
-                  echo "ERROR: Could not start the OpenClaw gateway."
-                  echo "SSH into the server and run: openclaw onboard --install-daemon"
-                  exit 1
-                }
+              openclaw gateway start 2>/dev/null || {
+                echo "ERROR: Could not start the OpenClaw gateway."
+                echo "SSH into the server and run: openclaw gateway install && openclaw gateway start"
+                exit 1
+              }
             fi
 
             # ── 6. Health checks ────────────────────────────────────────────────────

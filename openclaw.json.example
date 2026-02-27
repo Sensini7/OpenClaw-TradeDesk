@@ -14,7 +14,13 @@
   },
   "auth": {
     "profiles": {
-      "default": "YOUR_KEY_HERE"
+      "default": {
+        "provider": "anthropic",
+        "mode": "api_key"
+      }
+    },
+    "order": {
+      "anthropic": ["default"]
     }
   },
   "agents": {
