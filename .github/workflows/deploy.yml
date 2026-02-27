@@ -192,19 +192,30 @@ jobs:
             # over plain HTTP on non-localhost origins.  nginx terminates TLS so the
             # dashboard works without a VPN or SSH tunnel.
             #
-            # Flow:
-            #   a) Write a baseline HTTP nginx config
-            #   b) Run certbot --nginx to get a Let's Encrypt cert (idempotent)
-            #   c) If Let's Encrypt fails, fall back to a self-signed cert
-            #   d) Replace dangerouslyAllowHostHeaderOriginFallback with explicit
-            #      allowedOrigins and restart the gateway
+            # Domain strategy (in priority order):
+            #   1. OPENCLAW_DOMAIN secret — use exactly as given.
+            #   2. `hostname -f` — use if it has a public A record.
+            #   3. <public-ip>.nip.io — free wildcard DNS that resolves <ip>.nip.io
+            #      to <ip>; lets Let's Encrypt verify without any domain registration.
+            #      Needed when the VPS hostname is PTR-only (no forward A record).
             DOMAIN="${OPENCLAW_DOMAIN:-$(hostname -f)}"
             NGINX_CONF=/etc/nginx/sites-available/openclaw
-            echo "==> Setting up nginx HTTPS proxy for $DOMAIN..."
+            echo "==> Setting up nginx HTTPS proxy..."
 
             # Install nginx + certbot if absent (idempotent)
             command -v nginx   &>/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nginx
             command -v certbot &>/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq certbot python3-certbot-nginx
+
+            # If no custom domain is set and the hostname has no public A record
+            # (PTR-only hostnames are common on VPS providers), fall back to nip.io.
+            if [ -z "${OPENCLAW_DOMAIN:-}" ] && ! getent hosts "$DOMAIN" &>/dev/null; then
+              PUBLIC_IP=$(curl -4s --connect-timeout 5 ifconfig.me 2>/dev/null \
+                || curl -4s --connect-timeout 5 icanhazip.com 2>/dev/null \
+                || hostname -I | awk '{print $1}')
+              DOMAIN="${PUBLIC_IP}.nip.io"
+              echo "    hostname has no A record — using $DOMAIN (nip.io wildcard)."
+            fi
+            echo "    Domain: $DOMAIN"
 
             # Write baseline HTTP config; certbot will upgrade it to HTTPS in-place.
             # On re-deploys the baseline is re-written and certbot re-adds SSL.
