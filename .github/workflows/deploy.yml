@@ -45,25 +45,7 @@ jobs:
             [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
             export PATH="$HOME/.local/bin:$HOME/.npm/bin:/usr/local/bin:$PATH"
 
-            # ── 1. Install OpenClaw if not present ──────────────────────────────────
-            if ! command -v openclaw &>/dev/null; then
-              echo "==> OpenClaw not found — installing..."
-              curl -fsSL https://openclaw.ai/install.sh | bash
-
-              # Re-source nvm and PATH in case the installer added new entries
-              [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-              export PATH="$HOME/.local/bin:$HOME/.npm/bin:/usr/local/bin:$PATH"
-
-              if ! command -v openclaw &>/dev/null; then
-                echo "ERROR: OpenClaw installation failed — binary not found after install."
-                exit 1
-              fi
-              echo "==> OpenClaw installed: $(openclaw --version 2>/dev/null || echo 'version unknown')"
-            else
-              echo "==> OpenClaw already installed: $(openclaw --version 2>/dev/null || echo 'version unknown')"
-            fi
-
-            # ── 2. Clone or pull the workspace ──────────────────────────────────────
+            # ── 1. Clone or pull the workspace ──────────────────────────────────────
             if [ -d "$WORKSPACE/.git" ]; then
               echo "==> Pulling latest changes into workspace..."
               git -C "$WORKSPACE" pull origin main
@@ -75,12 +57,13 @@ jobs:
                 echo "    Existing workspace moved to: $BACKUP"
                 mv "$WORKSPACE" "$BACKUP"
               fi
+              mkdir -p "$HOME/.openclaw"
               git clone https://github.com/Sensini7/OpenClaw-TradeDesk.git "$WORKSPACE"
             fi
 
-            # ── 3. Inject secrets into ~/.openclaw/openclaw.json ────────────────────
-            # Always regenerate from the template so structural changes in the repo
-            # are picked up. Secrets are never stored in the repo — only injected here.
+            # ── 2. Inject secrets into ~/.openclaw/openclaw.json ────────────────────
+            # Done BEFORE installing OpenClaw so the installer finds a pre-existing
+            # config and skips the interactive onboarding wizard (no TTY in CI).
             echo "==> Writing $CONFIG from template..."
             mkdir -p "$HOME/.openclaw"
             cp "$WORKSPACE/openclaw.json.example" "$CONFIG"
@@ -101,6 +84,27 @@ jobs:
 
             echo "==> Secrets injected into openclaw.json."
 
+            # ── 3. Install OpenClaw if not present ──────────────────────────────────
+            # CI=1 tells the installer to run non-interactively.
+            # The pre-written openclaw.json above means the installer has no reason
+            # to prompt for credentials even if CI detection is incomplete.
+            if ! command -v openclaw &>/dev/null; then
+              echo "==> OpenClaw not found — installing..."
+              CI=1 curl -fsSL https://openclaw.ai/install.sh | bash
+
+              # Re-source nvm and PATH in case the installer added new entries
+              [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+              export PATH="$HOME/.local/bin:$HOME/.npm/bin:/usr/local/bin:$PATH"
+
+              if ! command -v openclaw &>/dev/null; then
+                echo "ERROR: OpenClaw installation failed — binary not found after install."
+                exit 1
+              fi
+              echo "==> OpenClaw installed: $(openclaw --version 2>/dev/null || echo 'version unknown')"
+            else
+              echo "==> OpenClaw already installed: $(openclaw --version 2>/dev/null || echo 'version unknown')"
+            fi
+
             # ── 4. Create intel/ symlinks (idempotent) ──────────────────────────────
             # Each agent workspace must have intel/ symlinked so agents can
             # read/write pipeline files without stepping outside their workspace.
@@ -119,7 +123,7 @@ jobs:
               echo "    Gateway restarted."
             else
               echo "    Gateway not registered yet — running first-time daemon setup..."
-              openclaw onboard --install-daemon --yes 2>/dev/null || \
+              CI=1 openclaw onboard --install-daemon 2>/dev/null || \
                 openclaw gateway install-daemon 2>/dev/null || \
                 openclaw gateway start 2>/dev/null || {
                   echo "ERROR: Could not start the OpenClaw gateway."
