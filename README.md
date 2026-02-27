@@ -480,17 +480,76 @@ cat ~/.openclaw/workspace/intel/BRIEFING.md
 
 ## Production Deployment (VPS)
 
-This setup runs on WSL for development. To deploy to a production VPS:
-
-1. Provision an EC2 instance (minimum `t3.medium` / 4GB RAM)
-2. Install Node.js 22+ and OpenClaw
-3. Clone this repo to `~/.openclaw/workspace/`
-4. Copy your `openclaw.json` with real credentials
-5. Create intel symlinks
-6. Set up cron jobs
-7. Enable Tailscale for SSH access (never expose port 22)
+This setup runs on WSL for development. For production, deploy to any Linux VPS (Ubuntu 22.04+ recommended, minimum 2 GB RAM).
 
 On a VPS, the gateway runs 24/7 as a systemd service — no WSL networking quirks, no need to keep a laptop open.
+
+---
+
+## Automated Deployment via GitHub Actions
+
+Every push to `main` automatically deploys to your VPS over SSH. Secrets are injected at deploy time — nothing sensitive is ever stored in the repo.
+
+The workflow file is at `.github/workflows/deploy.yml`.
+
+### Prerequisites on the VPS
+
+Before the first deploy, install OpenClaw on your server:
+
+```bash
+curl -fsSL https://openclaw.ai/install.sh | bash
+openclaw onboard --install-daemon
+```
+
+### One-Time SSH Key Setup
+
+Generate a dedicated deploy key (do this on your **local machine** or any trusted machine):
+
+```bash
+ssh-keygen -t ed25519 -C "github-deploy-openclaw" -f ~/.ssh/openclaw_deploy -N ""
+```
+
+Add the **public key** to your server's authorized keys (log in with your password one last time):
+
+```bash
+# Copy public key output:
+cat ~/.ssh/openclaw_deploy.pub
+
+# Then on the server, append it:
+echo "ssh-ed25519 AAAA..." >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+```
+
+Copy the **private key** — you'll paste it into GitHub secrets:
+
+```bash
+cat ~/.ssh/openclaw_deploy
+```
+
+### GitHub Secrets to Configure
+
+Go to your repo → **Settings → Secrets and variables → Actions → New repository secret** and add each of these:
+
+| Secret Name | Value | Required |
+|---|---|---|
+| `SSH_HOST` | Your server's public IP address | Yes |
+| `SSH_USER` | SSH login username (e.g. `root`) | Yes |
+| `SSH_PRIVATE_KEY` | Full contents of `~/.ssh/openclaw_deploy` (private key) | Yes |
+| `ANTHROPIC_API_KEY` | `sk-ant-api03-...` from [console.anthropic.com](https://console.anthropic.com) | Yes |
+| `TELEGRAM_BOT_TOKEN` | Bot token from [@BotFather](https://t.me/BotFather) | Yes |
+| `TELEGRAM_USER_ID` | Your numeric Telegram user ID from [@userinfobot](https://t.me/userinfobot) | Yes |
+| `OPENCLAW_GATEWAY_TOKEN` | Custom gateway auth token | No (uses default if unset) |
+
+### What the Workflow Does on Each Push
+
+1. SSHes into your VPS using the deploy key
+2. Clones the repo to `~/.openclaw/workspace/` on first run; pulls on subsequent runs
+3. Writes `~/.openclaw/openclaw.json` fresh from `openclaw.json.example` with secrets injected — the config file never touches the repo
+4. Creates `intel/` symlinks in each agent's workspace (idempotent)
+5. Restarts the OpenClaw gateway
+6. Runs health checks (`openclaw gateway status`, `openclaw agents list`)
+
+You can also trigger a deploy manually from the **Actions** tab → **Deploy to VPS** → **Run workflow**.
 
 ---
 
