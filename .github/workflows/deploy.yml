@@ -90,13 +90,7 @@ jobs:
 
             # Write the actual API key to auth-profiles.json (separate from openclaw.json)
             # openclaw reads this file to resolve the "default" api_key profile.
-            cat > "$HOME/.openclaw/auth-profiles.json" <<AUTHEOF
-{
-  "default": {
-    "apiKey": "${ANTHROPIC_API_KEY}"
-  }
-}
-AUTHEOF
+            printf '{\n  "default": {\n    "apiKey": "%s"\n  }\n}\n' "${ANTHROPIC_API_KEY}" > "$HOME/.openclaw/auth-profiles.json"
 
             echo "==> Config and auth-profiles.json written."
 
