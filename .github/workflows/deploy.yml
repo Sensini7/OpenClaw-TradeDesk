@@ -137,6 +137,9 @@ jobs:
             echo "==> Running openclaw doctor --fix to migrate config..."
             openclaw doctor --fix 2>&1 || true
 
+            # Ensure gateway binds to all interfaces (doctor may reset this)
+            sed -i 's/"bind": "loopback"/"bind": "0.0.0.0"/g' "$CONFIG"
+
             # ── 5. Start/restart OpenClaw gateway ───────────────────────────────────
             # 'openclaw gateway restart' exits 0 even when the service is disabled
             # ("Gateway service disabled.") so we cannot rely on its exit code.
