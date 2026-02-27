@@ -41,10 +41,10 @@ jobs:
             # ── 0. Bootstrap PATH (nvm / local bins) ────────────────────────────────
             # OpenClaw is Node.js-based and may be installed via nvm or npm global.
             # SSH sessions don't load .bashrc, so we source nvm manually.
-            # openclaw >=2026.x requires Node >=22 — activate it explicitly.
+            # openclaw >=2026.x requires Node >=22 — install it if missing (idempotent).
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-            nvm use 22 2>/dev/null || nvm use --lts 2>/dev/null || true
+            nvm install 22 2>/dev/null && nvm alias default 22 2>/dev/null || true
             export PATH="$HOME/.local/bin:$HOME/.npm/bin:/usr/local/bin:$PATH"
 
             # ── 1. Clone or pull the workspace ──────────────────────────────────────
@@ -88,15 +88,21 @@ jobs:
 
             # ── 3. Install OpenClaw if not present ──────────────────────────────────
             # CI=1 tells the installer to run non-interactively.
-            # The pre-written openclaw.json above means the installer has no reason
-            # to prompt for credentials even if CI detection is incomplete.
+            # The pre-written openclaw.json above means the installer skips the
+            # interactive onboarding wizard.
+            #
+            # NOTE: The install.sh "Finalizing setup" step runs `openclaw` internally
+            # and will exit 1 in no-TTY CI environments (/dev/tty unavailable).
+            # The npm package itself is fully installed before that step — so we run
+            # the installer in a subshell, suppress its exit code, then verify the
+            # binary exists independently.
             if ! command -v openclaw &>/dev/null; then
               echo "==> OpenClaw not found — installing..."
-              CI=1 curl -fsSL https://openclaw.ai/install.sh | bash
+              ( curl -fsSL https://openclaw.ai/install.sh | CI=1 bash ) 2>&1 || true
 
-              # Re-source nvm, switch to Node 22, and set it as the default
+              # Re-source nvm so the newly installed bin/ is on PATH
               [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-              nvm use 22 && nvm alias default 22
+              nvm use 22 2>/dev/null || true
               export PATH="$HOME/.local/bin:$HOME/.npm/bin:/usr/local/bin:$PATH"
 
               if ! command -v openclaw &>/dev/null; then
