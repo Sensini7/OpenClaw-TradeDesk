@@ -137,15 +137,15 @@ jobs:
             echo "==> Running openclaw doctor --fix to migrate config..."
             openclaw doctor --fix 2>&1 || true
 
-            # Ensure gateway binds to all interfaces (doctor may reset this)
-            sed -i 's/"bind": "loopback"/"bind": "0.0.0.0"/g' "$CONFIG"
-
-            # Ensure gateway auth token is present (doctor may strip the auth section)
+            # Enforce gateway bind=lan and auth token after doctor
+            # (doctor may reset bind to loopback or strip the auth section)
             GW_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-4bbaf7385f68a2d6914bdf661a52403ca213d2fd018ecbab}"
             if command -v jq &>/dev/null; then
               tmp=$(mktemp)
-              jq --arg t "$GW_TOKEN" '.gateway.auth = {"mode":"token","token":$t}' "$CONFIG" > "$tmp" && mv "$tmp" "$CONFIG"
-              echo "    Gateway auth token enforced."
+              jq --arg t "$GW_TOKEN" \
+                '.gateway.bind = "lan" | .gateway.auth = {"mode":"token","token":$t}' \
+                "$CONFIG" > "$tmp" && mv "$tmp" "$CONFIG"
+              echo "    Gateway config enforced (bind=lan, auth=token)."
             fi
 
             # ── 5. Start/restart OpenClaw gateway ───────────────────────────────────

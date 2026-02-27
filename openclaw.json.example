@@ -226,7 +226,7 @@
   "gateway": {
     "port": 18789,
     "mode": "local",
-    "bind": "0.0.0.0",
+    "bind": "lan",
     "auth": {
       "mode": "token",
       "token": "4bbaf7385f68a2d6914bdf661a52403ca213d2fd018ecbab"
