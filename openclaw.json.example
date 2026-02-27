@@ -1,0 +1,253 @@
+{
+  "meta": {
+    "lastTouchedVersion": "2026.2.21-2",
+    "lastTouchedAt": "2026-02-23T19:40:59.328Z"
+  },
+  "wizard": {
+    "lastRunAt": "2026-02-23T03:05:00.287Z",
+    "lastRunVersion": "2026.2.21-2",
+    "lastRunCommand": "onboard",
+    "lastRunMode": "local"
+  },
+  "browser": {
+    "enabled": true
+  },
+  "auth": {
+    "profiles": "YOUR_KEY_HERE"
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "anthropic/claude-sonnet-4-5-20250929"
+      },
+      "models": {
+        "anthropic/claude-sonnet-4-5-20250929": {}
+      },
+      "workspace": "/root/.openclaw/workspace",
+      "compaction": {
+        "mode": "safeguard"
+      },
+      "maxConcurrent": 4,
+      "subagents": {
+        "maxConcurrent": 8
+      }
+    },
+    "list": [
+      {
+        "id": "commander",
+        "default": true,
+        "name": "Commander \ud83d\udc51",
+        "workspace": "/root/.openclaw/workspace",
+        "model": {
+          "primary": "anthropic/claude-sonnet-4-5-20250929"
+        },
+        "subagents": {
+          "allowAgents": [
+            "scout",
+            "oracle",
+            "trigger",
+            "sentinel",
+            "herald"
+          ]
+        },
+        "tools": {
+          "profile": "full"
+        }
+      },
+      {
+        "id": "scout",
+        "name": "Scout \ud83d\udd2d",
+        "workspace": "/root/.openclaw/workspace/agents/scout",
+        "model": {
+          "primary": "anthropic/claude-haiku-4-5-20251001"
+        },
+        "tools": {
+          "profile": "minimal",
+          "alsoAllow": [
+            "read",
+            "write",
+            "edit",
+            "exec",
+            "browser",
+            "web_search",
+            "web_fetch",
+            "memory_search",
+            "memory_get"
+          ]
+        }
+      },
+      {
+        "id": "oracle",
+        "name": "Oracle \ud83d\udcca",
+        "workspace": "/root/.openclaw/workspace/agents/oracle",
+        "model": {
+          "primary": "anthropic/claude-sonnet-4-5-20250929"
+        },
+        "tools": {
+          "profile": "minimal",
+          "alsoAllow": [
+            "read",
+            "write",
+            "edit",
+            "exec",
+            "memory_search",
+            "memory_get"
+          ]
+        }
+      },
+      {
+        "id": "trigger",
+        "name": "Trigger \u26a1",
+        "workspace": "/root/.openclaw/workspace/agents/trigger",
+        "model": {
+          "primary": "anthropic/claude-sonnet-4-5-20250929"
+        },
+        "tools": {
+          "profile": "minimal",
+          "alsoAllow": [
+            "read",
+            "write",
+            "edit",
+            "exec",
+            "memory_search",
+            "memory_get"
+          ]
+        }
+      },
+      {
+        "id": "sentinel",
+        "name": "Sentinel \ud83d\udee1\ufe0f",
+        "workspace": "/root/.openclaw/workspace/agents/sentinel",
+        "model": {
+          "primary": "anthropic/claude-haiku-4-5-20251001"
+        },
+        "tools": {
+          "profile": "minimal",
+          "alsoAllow": [
+            "read",
+            "write",
+            "edit",
+            "exec",
+            "memory_search",
+            "memory_get"
+          ]
+        }
+      },
+      {
+        "id": "herald",
+        "name": "Herald \ud83d\udcf2",
+        "workspace": "/root/.openclaw/workspace/agents/herald",
+        "model": {
+          "primary": "anthropic/claude-haiku-4-5-20251001"
+        },
+        "tools": {
+          "profile": "minimal",
+          "alsoAllow": [
+            "read",
+            "write",
+            "edit",
+            "exec",
+            "memory_search",
+            "memory_get",
+            "message"
+          ]
+        }
+      }
+    ]
+  },
+  "tools": {
+    "agentToAgent": {
+      "enabled": true,
+      "allow": [
+        "commander",
+        "scout",
+        "oracle",
+        "trigger",
+        "sentinel",
+        "herald"
+      ]
+    }
+  },
+  "bindings": [
+    {
+      "agentId": "commander",
+      "match": {
+        "channel": "telegram"
+      }
+    }
+  ],
+  "messages": {
+    "ackReactionScope": "group-mentions"
+  },
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto",
+    "restart": true,
+    "ownerDisplay": "raw"
+  },
+  "hooks": {
+    "internal": {
+      "enabled": true,
+      "entries": {
+        "boot-md": {
+          "enabled": true
+        },
+        "bootstrap-extra-files": {
+          "enabled": true
+        },
+        "command-logger": {
+          "enabled": true
+        },
+        "session-memory": {
+          "enabled": true
+        }
+      }
+    }
+  },
+  "channels": {
+    "telegram": {
+      "dmPolicy": "pairing",
+      "botToken": "YOUR_BOT_TOKEN_HERE",
+      "allowFrom": [
+        "YOUR_TELEGRAM_USER_ID"
+      ],
+      "groupPolicy": "allowlist",
+      "streaming": false
+    }
+  },
+  "gateway": {
+    "port": 18789,
+    "mode": "local",
+    "bind": "loopback",
+    "auth": {
+      "mode": "token",
+      "token": "4bbaf7385f68a2d6914bdf661a52403ca213d2fd018ecbab"
+    },
+    "tailscale": {
+      "mode": "off",
+      "resetOnExit": false
+    },
+    "nodes": {
+      "denyCommands": [
+        "camera.snap",
+        "camera.clip",
+        "screen.record",
+        "calendar.add",
+        "contacts.add",
+        "reminders.add"
+      ]
+    }
+  },
+  "skills": {
+    "install": {
+      "nodeManager": "npm"
+    }
+  },
+  "plugins": {
+    "entries": {
+      "telegram": {
+        "enabled": true
+      }
+    }
+  }
+}

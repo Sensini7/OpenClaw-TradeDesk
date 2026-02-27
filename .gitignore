@@ -1,0 +1,14 @@
+# OpenClaw internal state
+.openclaw/
+.pi/
+
+# Symlinks (recreated by setup)
+agents/*/intel
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Secrets (never commit)
+openclaw.json
+.env

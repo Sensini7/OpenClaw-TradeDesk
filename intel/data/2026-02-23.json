@@ -1,0 +1,257 @@
+{
+  "date": "2026-02-23",
+  "timestamp": "2026-02-23T20:14:00Z",
+  "timezone": "GMT+1",
+  "market_status": "SUNDAY_FOREX_CLOSED",
+  "generated_by": "Scout 🔭",
+  
+  "macro_summary": {
+    "bias": "BEARISH",
+    "sentiment": "risk_off",
+    "key_themes": [
+      "Tariff shock (Dow -800 points Friday)",
+      "AI disruption fears (software stocks hit)",
+      "Safe-haven demand (gold, bonds bid up)",
+      "Fed uncertain on rate path (Waller guidance)"
+    ],
+    "equity_action": "Broad selloff Friday on tariff uncertainty and AI research report",
+    "safe_havens_action": "Gold +2.29%, Bonds rallying, Treasuries rising"
+  },
+  
+  "gold_xauusd": {
+    "status": "CLOSED_MARKET",
+    "proxy": "GLD",
+    "price": 479.36,
+    "change_percent": 2.29,
+    "previous_close": 468.62,
+    "performance": {
+      "week": 3.62,
+      "month": 6.10,
+      "quarter": 27.84,
+      "ytd": 20.96,
+      "one_year": 73.02,
+      "three_year": 39.50,
+      "five_year": 22.38,
+      "ten_year": 308.94
+    },
+    "technicals": {
+      "rsi_14": 60.63,
+      "atr_14": 13.79,
+      "volatility": 1.51,
+      "beta": 0.13,
+      "relative_volume": 0.90
+    },
+    "range": {
+      "52w_high": 509.70,
+      "52w_high_distance_percent": -5.95,
+      "52w_low": 261.25,
+      "52w_low_distance_percent": 83.49
+    },
+    "volume": {
+      "current": 13075965,
+      "average": 17040000
+    },
+    "signal": "BULLISH",
+    "commentary": "Safe-haven flows intact; tariff uncertainty supporting gold; YTD +20.96% confirms sustained uptrend; volatility now exceeds Bitcoin"
+  },
+
+  "watchlist": {
+    "XAUUSD": {
+      "status": "CLOSED",
+      "signal": "BULLISH",
+      "data": "See gold_xauusd section"
+    },
+    "USDJPY": {
+      "status": "CLOSED",
+      "signal": "WATCH_MONDAY",
+      "note": "Expect opening gap on tariff/sentiment"
+    },
+    "EURUSD": {
+      "status": "CLOSED",
+      "signal": "WATCH_MONDAY",
+      "note": "Trade deal uncertainty (EU vote postponed)"
+    },
+    "GBPUSD": {
+      "status": "CLOSED",
+      "signal": "WATCH_MONDAY",
+      "note": "Brexit/trade implications to watch"
+    },
+    "USDCAD": {
+      "status": "CLOSED",
+      "signal": "WATCH_MONDAY",
+      "note": "Tariff implications for Canadian trade"
+    },
+    "GBPJPY": {
+      "status": "CLOSED",
+      "signal": "WATCH_MONDAY",
+      "note": "Risk-off asset correlation watch"
+    },
+    "AUDUSD": {
+      "status": "CLOSED",
+      "signal": "WATCH_MONDAY",
+      "note": "Commodity-linked currency"
+    }
+  },
+
+  "headlines": {
+    "total_count": 47,
+    "categorized": {
+      "tariff_crisis": [
+        {
+          "rank": 1,
+          "time": "15:01 ET Friday",
+          "headline": "Dow sliding 800 points as U.S. stocks plummet on tariff tumult, AI fears",
+          "source": "MarketWatch",
+          "sentiment": "bearish"
+        },
+        {
+          "rank": 2,
+          "time": "14:35 ET Friday",
+          "headline": "Wall Street tumbles; weighed by software, financials amid revived global tariff angst",
+          "source": "Reuters",
+          "sentiment": "bearish"
+        },
+        {
+          "headline": "Dow now on track for its worst day in a month as Trump plans replacement tariffs",
+          "time": "12:33 ET Friday",
+          "sentiment": "bearish"
+        },
+        {
+          "headline": "Trump's tariff salvo sets up a Trade War 2.0 breakout",
+          "time": "10:27 AM ET Friday",
+          "sentiment": "bearish"
+        },
+        {
+          "headline": "'A deal is a deal': EU postpones vote on US trade deal",
+          "time": "11:34 AM ET Friday",
+          "sentiment": "bearish"
+        }
+      ],
+      "ai_disruption": [
+        {
+          "headline": "Software, Payment Shares Sink After Citrini Post on AI Risks",
+          "source": "Bloomberg",
+          "time": "15:06 ET Friday",
+          "sentiment": "bearish"
+        },
+        {
+          "headline": "A selloff of 40% is in the cards for stocks, from this gloomy perspective on AI",
+          "time": "11:28 AM ET Friday",
+          "sentiment": "bearish"
+        }
+      ],
+      "gold": [
+        {
+          "headline": "Stagflation Trade Is Back - Gold, Silver Rally After GDP Miss, Hot Inflation",
+          "source": "Benzinga",
+          "date": "2026-02-20",
+          "sentiment": "bullish"
+        },
+        {
+          "headline": "Newmont Crushes Earnings With Record Free Cash Flow but Guidance Stalls the Rally",
+          "source": "24/7 Wall St.",
+          "sentiment": "bullish"
+        },
+        {
+          "headline": "Gold's Rally Just Rewrote The Commodity Playbook, Goldman Sachs Says",
+          "source": "Benzinga",
+          "sentiment": "bullish"
+        },
+        {
+          "headline": "Gold Volatility Surges Past Bitcoin as 44% Swings Rattle Markets",
+          "source": "GuruFocus",
+          "sentiment": "neutral"
+        },
+        {
+          "headline": "Peter Schiff Says 'Buy The Dips' - As Gold's Pullback Tests Conviction",
+          "source": "Benzinga",
+          "sentiment": "bullish"
+        }
+      ],
+      "fed_policy": [
+        {
+          "headline": "Fed's Waller Says March Rate Call Depends on Labor Market",
+          "time": "12:16 PM ET Friday",
+          "sentiment": "neutral"
+        },
+        {
+          "headline": "Top Fed Official Sees Little Effect on Rate Outlook From Supreme Court's Tariff Ruling",
+          "time": "08:01 AM ET Friday",
+          "sentiment": "neutral"
+        }
+      ],
+      "safe_havens": [
+        {
+          "headline": "Treasuries Gain as Markets Rattled by Trump's New Trade War",
+          "time": "11:02 AM ET Friday",
+          "sentiment": "bullish"
+        },
+        {
+          "headline": "Bond Market Momentum Shifts Bears' Way as Sell Signals Flash",
+          "time": "11:19 AM ET Friday",
+          "sentiment": "neutral"
+        }
+      ],
+      "credit_risk": [
+        {
+          "headline": "Blue Owl Anxiety Rattles the $1.8 Trillion Private Credit Market",
+          "time": "10:27 AM ET Friday",
+          "sentiment": "bearish"
+        },
+        {
+          "headline": "European Private Lenders' Shares Tumble as Selloff Intensifies",
+          "time": "13:28 ET Friday",
+          "sentiment": "bearish"
+        }
+      ]
+    }
+  },
+
+  "economic_events": [
+    {
+      "name": "Labor Market Data",
+      "impact": "HIGH",
+      "timing": "Week of Feb 24-28",
+      "reason": "March Fed rate decision trigger (Waller guidance)"
+    },
+    {
+      "name": "Factory Orders",
+      "impact": "MEDIUM",
+      "timing": "TBD"
+    },
+    {
+      "name": "Durable Goods Orders",
+      "impact": "MEDIUM",
+      "timing": "TBD"
+    }
+  ],
+
+  "data_quality": {
+    "gld_quote": "complete",
+    "gold_headlines": "complete",
+    "macro_headlines": "complete",
+    "finviz_sources": "working",
+    "forex_quotes": "unavailable_weekend",
+    "economic_calendar": "incomplete_sunday",
+    "last_update": "2026-02-23T20:14:00Z"
+  },
+
+  "sources": [
+    "finviz.com/quote.ashx?t=GLD",
+    "finviz.com/news.ashx",
+    "MarketWatch",
+    "Reuters",
+    "Bloomberg",
+    "Benzinga",
+    "GuruFocus",
+    "24/7 Wall St."
+  ],
+
+  "next_actions": [
+    "Monitor gold (XAUUSD) for continuation of safe-haven bid",
+    "Watch forex pairs Monday opening for tariff-driven gaps",
+    "Track Fed speakers (Waller) for rate guidance",
+    "Monitor labor market data for March rate decision implications",
+    "Track credit market stress (Blue Owl, private lenders) for spillover risk"
+  ]
+}
