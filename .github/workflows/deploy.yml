@@ -109,22 +109,8 @@ jobs:
               "${ANTHROPIC_API_KEY}" > "$AUTH_JSON"
 
             # Per-agent auth store matches the schema the 'openclaw agents add' wizard writes.
-            AGENT_AUTH=$(printf '{
-  "version": 1,
-  "profiles": {
-    "anthropic:default": {
-      "type": "api_key",
-      "provider": "anthropic",
-      "key": "%s"
-    }
-  },
-  "usageStats": {
-    "anthropic:default": {
-      "lastUsed": 0,
-      "errorCount": 0
-    }
-  }
-}' "${ANTHROPIC_API_KEY}")
+            # NOTE: keep this as a single printf line — multiline content breaks YAML block scalars.
+            AGENT_AUTH=$(printf '{\n  "version": 1,\n  "profiles": {\n    "anthropic:default": {\n      "type": "api_key",\n      "provider": "anthropic",\n      "key": "%s"\n    }\n  },\n  "usageStats": {\n    "anthropic:default": {\n      "lastUsed": 0,\n      "errorCount": 0\n    }\n  }\n}' "${ANTHROPIC_API_KEY}")
             for agent in commander scout oracle trigger sentinel herald; do
               agent_dir="$HOME/.openclaw/agents/$agent/agent"
               mkdir -p "$agent_dir"
