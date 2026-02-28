@@ -93,16 +93,42 @@ jobs:
             fi
 
             # Write the actual API key to auth-profiles.json (separate from openclaw.json)
-            # openclaw reads this file to resolve the "default" api_key profile.
-            # Must be present in BOTH the main dir AND each agent's own dir —
-            # agents look in their own agentDir first and fall back to the main dir
-            # only if configured to do so; copying to all dirs is the safe default.
+            #
+            # There are TWO different schemas:
+            #
+            #   ~/.openclaw/auth-profiles.json          — global fallback store
+            #     { "default": { "type": "api_key", "key": "..." } }
+            #
+            #   ~/.openclaw/agents/<agent>/agent/auth-profiles.json  — per-agent store
+            #     Written by the 'openclaw agents add' wizard; has a richer schema with
+            #     "version", "profiles" wrapper, namespaced key "anthropic:default", and
+            #     "usageStats". Using the wrong field names (e.g. "apiKey" instead of
+            #     "key") silently produces an empty store at runtime — no error is thrown.
             AUTH_JSON="$HOME/.openclaw/auth-profiles.json"
-            printf '{\n  "default": {\n    "apiKey": "%s"\n  }\n}\n' "${ANTHROPIC_API_KEY}" > "$AUTH_JSON"
+            printf '{\n  "default": {\n    "type": "api_key",\n    "key": "%s"\n  }\n}\n' \
+              "${ANTHROPIC_API_KEY}" > "$AUTH_JSON"
+
+            # Per-agent auth store matches the schema the 'openclaw agents add' wizard writes.
+            AGENT_AUTH=$(printf '{
+  "version": 1,
+  "profiles": {
+    "anthropic:default": {
+      "type": "api_key",
+      "provider": "anthropic",
+      "key": "%s"
+    }
+  },
+  "usageStats": {
+    "anthropic:default": {
+      "lastUsed": 0,
+      "errorCount": 0
+    }
+  }
+}' "${ANTHROPIC_API_KEY}")
             for agent in commander scout oracle trigger sentinel herald; do
               agent_dir="$HOME/.openclaw/agents/$agent/agent"
               mkdir -p "$agent_dir"
-              cp "$AUTH_JSON" "$agent_dir/auth-profiles.json"
+              printf '%s\n' "$AGENT_AUTH" > "$agent_dir/auth-profiles.json"
             done
 
             echo "==> Config and auth-profiles.json written."
