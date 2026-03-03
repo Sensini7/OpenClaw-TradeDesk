@@ -84,25 +84,30 @@ for agent in commander scout oracle trigger sentinel herald; do
 done
 echo "    Auth profiles written for all 6 agents."
 
-# ── 5. Install OpenClaw binary ───────────────────────────────────────────────
+# ── 5. Install / upgrade OpenClaw binary ─────────────────────────────────────
 DEPLOY_INSTALL_METHOD="${DEPLOY_INSTALL_METHOD:-installer}"
 if [ "$DEPLOY_INSTALL_METHOD" = "installer" ]; then
+  CURRENT_VERSION="$(openclaw --version 2>/dev/null || echo 'none')"
+  echo "==> [5/14] OpenClaw update check (current: ${CURRENT_VERSION})..."
+
+  # Always run the installer — it's idempotent and will upgrade if a new version exists
+  ( curl -fsSL https://openclaw.ai/install.sh | CI=1 bash ) 2>&1 || true
+
+  # Re-source nvm for newly installed/upgraded binary
+  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+  nvm use 22 2>/dev/null || true
+  export PATH="$HOME/.local/bin:$HOME/.npm/bin:/usr/local/bin:$PATH"
+
   if ! command -v openclaw &>/dev/null; then
-    echo "==> [5/14] Installing OpenClaw via installer script..."
-    ( curl -fsSL https://openclaw.ai/install.sh | CI=1 bash ) 2>&1 || true
+    echo "ERROR: OpenClaw installation failed — binary not found."
+    exit 1
+  fi
 
-    # Re-source nvm for newly installed binary
-    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-    nvm use 22 2>/dev/null || true
-    export PATH="$HOME/.local/bin:$HOME/.npm/bin:/usr/local/bin:$PATH"
-
-    if ! command -v openclaw &>/dev/null; then
-      echo "ERROR: OpenClaw installation failed — binary not found."
-      exit 1
-    fi
-    echo "    OpenClaw installed: $(openclaw --version 2>/dev/null || echo 'unknown')"
+  NEW_VERSION="$(openclaw --version 2>/dev/null || echo 'unknown')"
+  if [ "$CURRENT_VERSION" = "$NEW_VERSION" ]; then
+    echo "    OpenClaw up to date: ${NEW_VERSION}"
   else
-    echo "==> [5/14] OpenClaw already installed: $(openclaw --version 2>/dev/null || echo 'unknown')"
+    echo "    OpenClaw upgraded: ${CURRENT_VERSION} -> ${NEW_VERSION}"
   fi
 elif [ "$DEPLOY_INSTALL_METHOD" = "docker" ]; then
   echo "==> [5/14] Skipping binary install (Docker mode)."
@@ -240,12 +245,114 @@ if [ "$DEPLOY_INSTALL_METHOD" = "installer" ]; then
   openclaw agents list 2>/dev/null || echo "    (agent list unavailable)"
 fi
 
+OC_VERSION="$(openclaw --version 2>/dev/null || echo 'unknown')"
+
 echo ""
-echo "============================================"
+echo "============================================================"
 echo "  Deployment complete!"
+echo "  OpenClaw:  ${OC_VERSION}"
 echo "  Channels:  ${DEPLOY_CHANNELS:-telegram}"
-echo "  Gateway:   ${DEPLOY_GATEWAY_BIND:-loopback}"
-echo "  Auth:      ${DEPLOY_AUTH_MODE:-token}"
-echo "  Process:   ${DEPLOY_PROCESS_MANAGER}"
+echo "  Gateway:   ${DEPLOY_GATEWAY_BIND:-loopback} / Auth: ${DEPLOY_AUTH_MODE:-token}"
+echo "  Session:   ${DEPLOY_SESSION_SCOPE:-per-channel-peer}"
+echo "  DM Policy: ${DEPLOY_DM_POLICY:-pairing}"
 echo "  Memory:    ${DEPLOY_MEMORY_PROVIDER}"
-echo "============================================"
+echo "  Nginx:     ${DEPLOY_NGINX_PROXY:-false}"
+echo "  Webhooks:  ${DEPLOY_WEBHOOKS:-false}"
+echo "  OTEL:      ${DEPLOY_OTEL_EXPORTER:-none}"
+echo "============================================================"
+echo ""
+echo "==================== ACCESS GUIDE =========================="
+echo ""
+
+# Dashboard access instructions based on gateway bind mode
+GW_BIND="${DEPLOY_GATEWAY_BIND:-loopback}"
+GW_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-}"
+SSH_HOST_LABEL="${SSH_HOST:-<server-ip>}"
+
+if [ "$GW_BIND" = "loopback" ]; then
+  echo "  Gateway is bound to LOOPBACK (localhost only)."
+  echo "  Remote access requires an SSH tunnel."
+  echo ""
+  echo "  1. Open an SSH tunnel from your local machine:"
+  echo "     ssh -L 18789:127.0.0.1:18789 openclaw"
+  echo ""
+  echo "  2. Open the dashboard in your browser:"
+  if [ -n "$GW_TOKEN" ]; then
+    echo "     http://127.0.0.1:18789/?token=${GW_TOKEN}"
+  else
+    echo "     http://127.0.0.1:18789/"
+    echo "     (Enter the gateway token when prompted)"
+  fi
+  echo ""
+  echo "  3. Keep the SSH session open while using the dashboard."
+  echo ""
+  echo "  Alternative: Use the CLI remotely (with tunnel active):"
+  echo "     openclaw gateway status --url ws://127.0.0.1:18789"
+elif [ "$GW_BIND" = "tailnet" ]; then
+  echo "  Gateway is bound to TAILNET."
+  echo "  Access via your Tailscale network."
+  echo ""
+  echo "  1. Ensure Tailscale is running on your local machine."
+  echo "  2. Open the dashboard:"
+  echo "     http://<tailscale-hostname>:18789/"
+  echo ""
+  echo "  3. Or use the CLI:"
+  echo "     openclaw gateway status --url ws://<tailscale-hostname>:18789"
+fi
+
+# Nginx access
+if [ "${DEPLOY_NGINX_PROXY:-false}" = "true" ]; then
+  echo ""
+  echo "  Nginx reverse proxy is ENABLED."
+  echo "  Dashboard: https://${DEPLOY_SERVER_NAME:-<your-domain>}/"
+  echo "  (Ensure SSL certs are configured in the Nginx template)"
+fi
+
+# Channel-specific notes
+echo ""
+echo "  ── Channel Access ──"
+IFS=',' read -ra CH_LIST <<< "${DEPLOY_CHANNELS:-telegram}"
+for ch in "${CH_LIST[@]}"; do
+  ch=$(echo "$ch" | tr -d ' ')
+  case "$ch" in
+    telegram)
+      echo "  Telegram: Message your bot directly. DM policy: ${DEPLOY_DM_POLICY:-pairing}"
+      if [ "${DEPLOY_DM_POLICY:-pairing}" = "pairing" ]; then
+        echo "            First message triggers a pairing code flow."
+      fi
+      ;;
+    discord)
+      echo "  Discord:  Invite your bot to a server using the OAuth2 URL from"
+      echo "            Discord Developer Portal > OAuth2 > URL Generator."
+      echo "            Required scopes: bot, applications.commands"
+      ;;
+    whatsapp)
+      echo "  WhatsApp: QR code pairing required on first connect."
+      echo "            SSH into server and check gateway logs for the QR code."
+      echo "            Logs: journalctl -u openclaw-gateway -f"
+      ;;
+    slack)
+      echo "  Slack:    Install the app to your Slack workspace via"
+      echo "            api.slack.com > Your Apps > Install to Workspace."
+      echo "            Socket Mode must be enabled in the app settings."
+      ;;
+  esac
+done
+
+# Memory search notes
+if [ "${DEPLOY_MEMORY_PROVIDER}" = "ollama" ]; then
+  echo ""
+  echo "  ── Memory Search ──"
+  echo "  Ollama is running with nomic-embed-text for semantic search."
+  echo "  Verify: ssh openclaw 'ollama list'"
+  echo "  Memory search is enabled for all agents."
+fi
+
+# Cron pipeline notes
+echo ""
+echo "  ── Cron Pipeline ──"
+echo "  5-agent pipeline (Scout > Oracle > Trigger > Sentinel > Herald)"
+echo "  runs Mon-Fri. Check cron jobs: ssh openclaw 'crontab -l'"
+
+echo ""
+echo "============================================================"
