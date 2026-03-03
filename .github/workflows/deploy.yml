@@ -1,176 +1,244 @@
-name: Deploy to VPS
+name: Deploy OpenClaw TradeDesk
 
-# Runs automatically on every push to main.
-# Secrets are injected over SSH — nothing sensitive ever touches the repo.
+# Runs automatically on push to main (with POC defaults).
+# Manual dispatch allows selecting deployment variants.
+# Secrets are injected over SSH — nothing sensitive touches the repo.
 
 on:
   push:
     branches:
       - main
-      - claude/genericize-readme-BrYAW  # temp: remove after merging to main
-  workflow_dispatch: # Allow manual trigger from GitHub Actions tab
+  workflow_dispatch:
+    inputs:
+      enable_telegram:
+        description: "Enable Telegram channel"
+        type: boolean
+        default: true
+      enable_discord:
+        description: "Enable Discord channel"
+        type: boolean
+        default: false
+      enable_whatsapp:
+        description: "Enable WhatsApp channel"
+        type: boolean
+        default: false
+      enable_slack:
+        description: "Enable Slack channel"
+        type: boolean
+        default: false
+      installation_method:
+        description: "OpenClaw installation method"
+        type: choice
+        options:
+          - installer
+          - docker
+        default: installer
+      gateway_bind:
+        description: "Gateway bind mode"
+        type: choice
+        options:
+          - loopback
+          - tailnet
+        default: loopback
+      auth_mode:
+        description: "Gateway authentication mode"
+        type: choice
+        options:
+          - token
+          - password
+          - tailscale
+        default: token
+      session_isolation:
+        description: "Session isolation scope"
+        type: choice
+        options:
+          - main
+          - per-channel-peer
+          - per-account-channel-peer
+        default: per-channel-peer
+      dm_policy:
+        description: "DM policy for channels"
+        type: choice
+        options:
+          - pairing
+          - allowlist
+          - open
+        default: pairing
+      cron_mode:
+        description: "Cron execution mode"
+        type: choice
+        options:
+          - main
+          - isolated
+        default: isolated
+      memory_provider:
+        description: "Semantic memory search provider"
+        type: choice
+        options:
+          - ollama
+          - openai
+          - none
+        default: ollama
+      process_manager:
+        description: "Process management method"
+        type: choice
+        options:
+          - systemd
+          - docker-compose
+        default: systemd
+      enable_nginx_proxy:
+        description: "Enable Nginx reverse proxy"
+        type: boolean
+        default: false
+      enable_webhooks:
+        description: "Enable external webhooks"
+        type: boolean
+        default: false
+      otel_exporter:
+        description: "OpenTelemetry exporter"
+        type: choice
+        options:
+          - none
+          - grafana
+          - datadog
+          - otel-collector
+        default: none
 
 jobs:
   deploy:
     name: Deploy OpenClaw TradeDesk
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.2.0
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_USER_ID: ${{ secrets.TELEGRAM_USER_ID }}
-          # Optional — leave unset to keep the default gateway token from openclaw.json.example
-          OPENCLAW_GATEWAY_TOKEN: ${{ secrets.OPENCLAW_GATEWAY_TOKEN }}
+      # ── Build channels list from inputs ──────────────────────────────────
+      - name: Build deployment parameters
+        id: params
+        run: |
+          # Build comma-separated channel list
+          CHANNELS=""
+          ENABLE_TG="${{ inputs.enable_telegram }}"
+          ENABLE_DC="${{ inputs.enable_discord }}"
+          ENABLE_WA="${{ inputs.enable_whatsapp }}"
+          ENABLE_SL="${{ inputs.enable_slack }}"
+
+          # Default to true for telegram on push events (no inputs)
+          if [ -z "$ENABLE_TG" ] || [ "$ENABLE_TG" = "true" ]; then
+            CHANNELS="telegram"
+          fi
+          if [ "$ENABLE_DC" = "true" ]; then
+            CHANNELS="${CHANNELS:+$CHANNELS,}discord"
+          fi
+          if [ "$ENABLE_WA" = "true" ]; then
+            CHANNELS="${CHANNELS:+$CHANNELS,}whatsapp"
+          fi
+          if [ "$ENABLE_SL" = "true" ]; then
+            CHANNELS="${CHANNELS:+$CHANNELS,}slack"
+          fi
+          # Fallback to telegram if nothing selected
+          CHANNELS="${CHANNELS:-telegram}"
+          echo "channels=$CHANNELS" >> "$GITHUB_OUTPUT"
+          echo "Channels: $CHANNELS"
+
+      # ── Docker build + push (only for Docker installs) ─────────────────
+      - name: Checkout repo (for Docker build)
+        if: inputs.installation_method == 'docker'
+        uses: actions/checkout@v4
+
+      - name: Build and transfer Docker image
+        if: inputs.installation_method == 'docker'
+        run: |
+          docker build -f deploy/docker/Dockerfile -t openclaw-tradedesk:latest .
+          docker save openclaw-tradedesk:latest | gzip > /tmp/openclaw-tradedesk.tar.gz
+
+      - name: SCP Docker image to server
+        if: inputs.installation_method == 'docker'
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
-          # Pass env vars into the remote shell session
-          envs: ANTHROPIC_API_KEY,TELEGRAM_BOT_TOKEN,TELEGRAM_USER_ID,OPENCLAW_GATEWAY_TOKEN
-          timeout: 300s
+          source: /tmp/openclaw-tradedesk.tar.gz
+          target: /tmp/
+
+      # ── Main deployment via SSH ────────────────────────────────────────
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          # Core secrets
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENCLAW_GATEWAY_TOKEN: ${{ secrets.OPENCLAW_GATEWAY_TOKEN }}
+          # Channel secrets
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_USER_ID: ${{ secrets.TELEGRAM_USER_ID }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_APP_TOKEN: ${{ secrets.SLACK_APP_TOKEN }}
+          # Optional secrets
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+          OPENCLAW_GATEWAY_PASSWORD: ${{ secrets.OPENCLAW_GATEWAY_PASSWORD }}
+          OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
+          DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+          GRAFANA_PUSH_URL: ${{ secrets.GRAFANA_PUSH_URL }}
+          # Deployment variant selectors
+          DEPLOY_CHANNELS: ${{ steps.params.outputs.channels }}
+          DEPLOY_INSTALL_METHOD: ${{ inputs.installation_method || 'installer' }}
+          DEPLOY_GATEWAY_BIND: ${{ inputs.gateway_bind || 'loopback' }}
+          DEPLOY_AUTH_MODE: ${{ inputs.auth_mode || 'token' }}
+          DEPLOY_SESSION_SCOPE: ${{ inputs.session_isolation || 'per-channel-peer' }}
+          DEPLOY_DM_POLICY: ${{ inputs.dm_policy || 'pairing' }}
+          DEPLOY_CRON_MODE: ${{ inputs.cron_mode || 'isolated' }}
+          DEPLOY_MEMORY_PROVIDER: ${{ inputs.memory_provider || 'ollama' }}
+          DEPLOY_PROCESS_MANAGER: ${{ inputs.process_manager || 'systemd' }}
+          DEPLOY_NGINX_PROXY: ${{ inputs.enable_nginx_proxy || 'false' }}
+          DEPLOY_WEBHOOKS: ${{ inputs.enable_webhooks || 'false' }}
+          DEPLOY_OTEL_EXPORTER: ${{ inputs.otel_exporter || 'none' }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          envs: >-
+            ANTHROPIC_API_KEY,OPENCLAW_GATEWAY_TOKEN,
+            TELEGRAM_BOT_TOKEN,TELEGRAM_USER_ID,
+            DISCORD_BOT_TOKEN,SLACK_BOT_TOKEN,SLACK_APP_TOKEN,
+            OPENAI_API_KEY,WEBHOOK_SECRET,WEBHOOK_URL,
+            OPENCLAW_GATEWAY_PASSWORD,
+            OTEL_EXPORTER_OTLP_ENDPOINT,DATADOG_API_KEY,GRAFANA_PUSH_URL,
+            DEPLOY_CHANNELS,DEPLOY_INSTALL_METHOD,DEPLOY_GATEWAY_BIND,
+            DEPLOY_AUTH_MODE,DEPLOY_SESSION_SCOPE,DEPLOY_DM_POLICY,
+            DEPLOY_CRON_MODE,DEPLOY_MEMORY_PROVIDER,DEPLOY_PROCESS_MANAGER,
+            DEPLOY_NGINX_PROXY,DEPLOY_WEBHOOKS,DEPLOY_OTEL_EXPORTER
+          timeout: 600s
           script: |
             set -e
 
-            WORKSPACE="$HOME/.openclaw/workspace"
-            CONFIG="$HOME/.openclaw/openclaw.json"
-
-            # ── 0. Bootstrap PATH (nvm / local bins) ────────────────────────────────
-            # OpenClaw is Node.js-based and may be installed via nvm or npm global.
-            # SSH sessions don't load .bashrc, so we source nvm manually.
-            # openclaw >=2026.x requires Node >=22 — install it if missing (idempotent).
+            # Bootstrap PATH
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-            nvm install 22 2>/dev/null && nvm alias default 22 2>/dev/null || true
             export PATH="$HOME/.local/bin:$HOME/.npm/bin:/usr/local/bin:$PATH"
 
-            # ── 1. Clone or pull the workspace ──────────────────────────────────────
+            # Load Docker image if applicable
+            if [ "${DEPLOY_INSTALL_METHOD}" = "docker" ] && [ -f /tmp/openclaw-tradedesk.tar.gz ]; then
+              echo "==> Loading Docker image..."
+              docker load < /tmp/openclaw-tradedesk.tar.gz
+              rm -f /tmp/openclaw-tradedesk.tar.gz
+            fi
+
+            # Sync workspace (deploy.sh also does this, but we need it to get deploy.sh itself)
+            WORKSPACE="$HOME/.openclaw/workspace"
             if [ -d "$WORKSPACE/.git" ]; then
-              echo "==> Pulling latest changes into workspace..."
-              git -C "$WORKSPACE" pull origin main
+              git -C "$WORKSPACE" fetch origin main
+              git -C "$WORKSPACE" reset --hard origin/main
             else
-              echo "==> Cloning repo into $WORKSPACE..."
-              # Back up any existing (non-git) workspace so nothing is silently lost
-              if [ -d "$WORKSPACE" ]; then
-                BACKUP="${WORKSPACE}-backup-$(date +%Y%m%d%H%M%S)"
-                echo "    Existing workspace moved to: $BACKUP"
-                mv "$WORKSPACE" "$BACKUP"
-              fi
               mkdir -p "$HOME/.openclaw"
               git clone https://github.com/Sensini7/OpenClaw-TradeDesk.git "$WORKSPACE"
             fi
 
-            # ── 2. Inject secrets into openclaw config files ─────────────────────────
-            # Done BEFORE installing OpenClaw so the installer finds a pre-existing
-            # config and skips the interactive onboarding wizard (no TTY in CI).
-            #
-            # IMPORTANT: auth.profiles in openclaw.json is METADATA ONLY (provider +
-            # mode). The actual API key must be written to auth-profiles.json, which
-            # openclaw reads separately. Do NOT put the API key inside openclaw.json.
-            echo "==> Writing $CONFIG from template..."
-            mkdir -p "$HOME/.openclaw"
-            cp "$WORKSPACE/openclaw.json.example" "$CONFIG"
-
-            sed -i "s|YOUR_BOT_TOKEN_HERE|${TELEGRAM_BOT_TOKEN}|g"  "$CONFIG"
-            sed -i "s|YOUR_TELEGRAM_USER_ID|${TELEGRAM_USER_ID}|g"  "$CONFIG"
-
-            # Replace gateway token only if the secret is set (otherwise keep default)
-            if [ -n "${OPENCLAW_GATEWAY_TOKEN}" ]; then
-              sed -i "s|4bbaf7385f68a2d6914bdf661a52403ca213d2fd018ecbab|${OPENCLAW_GATEWAY_TOKEN}|g" "$CONFIG"
-            fi
-
-            # Fix workspace paths in config if running as a non-root user
-            if [ "$HOME" != "/root" ]; then
-              sed -i "s|/root/.openclaw/workspace|$HOME/.openclaw/workspace|g" "$CONFIG"
-            fi
-
-            # Write the actual API key to auth-profiles.json (separate from openclaw.json)
-            # openclaw reads this file to resolve the "default" api_key profile.
-            cat > "$HOME/.openclaw/auth-profiles.json" <<AUTHEOF
-{
-  "default": {
-    "apiKey": "${ANTHROPIC_API_KEY}"
-  }
-}
-AUTHEOF
-
-            echo "==> Config and auth-profiles.json written."
-
-            # ── 3. Install OpenClaw if not present ──────────────────────────────────
-            # CI=1 tells the installer to run non-interactively.
-            # The pre-written openclaw.json above means the installer skips the
-            # interactive onboarding wizard.
-            #
-            # NOTE: The install.sh "Finalizing setup" step runs `openclaw` internally
-            # and will exit 1 in no-TTY CI environments (/dev/tty unavailable).
-            # The npm package itself is fully installed before that step — so we run
-            # the installer in a subshell, suppress its exit code, then verify the
-            # binary exists independently.
-            if ! command -v openclaw &>/dev/null; then
-              echo "==> OpenClaw not found — installing..."
-              ( curl -fsSL https://openclaw.ai/install.sh | CI=1 bash ) 2>&1 || true
-
-              # Re-source nvm so the newly installed bin/ is on PATH
-              [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-              nvm use 22 2>/dev/null || true
-              export PATH="$HOME/.local/bin:$HOME/.npm/bin:/usr/local/bin:$PATH"
-
-              if ! command -v openclaw &>/dev/null; then
-                echo "ERROR: OpenClaw installation failed — binary not found after install."
-                exit 1
-              fi
-              echo "==> OpenClaw installed: $(openclaw --version 2>/dev/null || echo 'version unknown')"
-            else
-              echo "==> OpenClaw already installed: $(openclaw --version 2>/dev/null || echo 'version unknown')"
-            fi
-
-            # ── 4. Create intel/ symlinks (idempotent) ──────────────────────────────
-            # Each agent workspace must have intel/ symlinked so agents can
-            # read/write pipeline files without stepping outside their workspace.
-            echo "==> Creating intel symlinks..."
-            for agent in scout oracle trigger sentinel herald; do
-              ln -sf "$WORKSPACE/intel" "$WORKSPACE/agents/$agent/intel"
-              echo "    agents/$agent/intel -> $WORKSPACE/intel"
-            done
-
-            # ── 4.5. Migrate config to current schema ───────────────────────────────
-            # doctor --fix auto-migrates stale fields (e.g. streaming boolean → enum,
-            # missing telegram.enabled). Must run after openclaw is installed.
-            echo "==> Running openclaw doctor --fix to migrate config..."
-            openclaw doctor --fix 2>&1 || true
-
-            # ── 5. Start/restart OpenClaw gateway ───────────────────────────────────
-            # 'openclaw gateway restart' exits 0 even when the service is disabled
-            # ("Gateway service disabled.") so we cannot rely on its exit code.
-            # Instead: always ensure the daemon is installed first (idempotent),
-            # then restart. The install step is a no-op when already installed.
-            echo "==> Starting OpenClaw gateway..."
-            openclaw gateway install 2>/dev/null || \
-              openclaw gateway install-daemon 2>/dev/null || true
-
-            if openclaw gateway restart 2>/dev/null; then
-              echo "    Gateway restarted."
-            else
-              openclaw gateway start 2>/dev/null || {
-                echo "ERROR: Could not start the OpenClaw gateway."
-                echo "SSH into the server and run: openclaw gateway install && openclaw gateway start"
-                exit 1
-              }
-            fi
-
-            # ── 6. Health checks ────────────────────────────────────────────────────
-            echo "==> Waiting for gateway to be ready..."
-            sleep 5
-
-            echo "--- Gateway status ---"
-            openclaw gateway status
-
-            echo "--- Agent list ---"
-            openclaw agents list
-
-            echo ""
-            echo "Deployment complete."
+            # Run the main deploy script
+            chmod +x "$WORKSPACE/deploy/deploy.sh"
+            chmod +x "$WORKSPACE/deploy/assemble-config.sh"
+            bash "$WORKSPACE/deploy/deploy.sh"

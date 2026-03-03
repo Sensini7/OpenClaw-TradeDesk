@@ -1,0 +1,19 @@
+{
+  "agents": {
+    "defaults": {
+      "memorySearch": {
+        "enabled": true,
+        "provider": "ollama",
+        "model": "nomic-embed-text",
+        "endpoint": "http://localhost:11434",
+        "hybridSearch": {
+          "enabled": true,
+          "keywordWeight": 0.3,
+          "semanticWeight": 0.7
+        },
+        "topK": 10,
+        "minScore": 0.4
+      }
+    }
+  }
+}

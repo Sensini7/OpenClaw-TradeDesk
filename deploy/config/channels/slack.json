@@ -1,0 +1,26 @@
+{
+  "channels": {
+    "slack": {
+      "dmPolicy": "${DM_POLICY}",
+      "botToken": "${SLACK_BOT_TOKEN}",
+      "appToken": "${SLACK_APP_TOKEN}",
+      "socketMode": true,
+      "streaming": false
+    }
+  },
+  "bindings": [
+    {
+      "agentId": "commander",
+      "match": {
+        "channel": "slack"
+      }
+    }
+  ],
+  "plugins": {
+    "entries": {
+      "slack": {
+        "enabled": true
+      }
+    }
+  }
+}

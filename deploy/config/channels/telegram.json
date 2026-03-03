@@ -1,0 +1,26 @@
+{
+  "channels": {
+    "telegram": {
+      "dmPolicy": "${DM_POLICY}",
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "allowFrom": ["${TELEGRAM_USER_ID}"],
+      "groupPolicy": "allowlist",
+      "streaming": false
+    }
+  },
+  "bindings": [
+    {
+      "agentId": "commander",
+      "match": {
+        "channel": "telegram"
+      }
+    }
+  ],
+  "plugins": {
+    "entries": {
+      "telegram": {
+        "enabled": true
+      }
+    }
+  }
+}

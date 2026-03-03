@@ -1,0 +1,7 @@
+{
+  "gateway": {
+    "auth": {
+      "allowTailscale": true
+    }
+  }
+}

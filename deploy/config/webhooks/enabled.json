@@ -1,0 +1,25 @@
+{
+  "hooks": {
+    "external": {
+      "enabled": true,
+      "entries": {
+        "webhook-forwarder": {
+          "enabled": true,
+          "url": "${WEBHOOK_URL}",
+          "secret": "${WEBHOOK_SECRET}",
+          "events": [
+            "agent.run.start",
+            "agent.run.end",
+            "agent.run.error",
+            "message.received",
+            "message.sent",
+            "cron.job.start",
+            "cron.job.end"
+          ],
+          "retries": 3,
+          "timeoutMs": 5000
+        }
+      }
+    }
+  }
+}

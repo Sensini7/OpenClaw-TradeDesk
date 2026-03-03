@@ -1,0 +1,8 @@
+{
+  "gateway": {
+    "bind": "tailnet",
+    "tailscale": {
+      "mode": "serve"
+    }
+  }
+}

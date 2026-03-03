@@ -1,0 +1,137 @@
+{
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "anthropic/claude-sonnet-4-5-20250929"
+      },
+      "models": {
+        "anthropic/claude-sonnet-4-5-20250929": {}
+      },
+      "workspace": "${WORKSPACE_ROOT}",
+      "compaction": {
+        "mode": "safeguard"
+      },
+      "maxConcurrent": 4,
+      "subagents": {
+        "maxConcurrent": 8
+      }
+    },
+    "list": [
+      {
+        "id": "commander",
+        "default": true,
+        "name": "Commander",
+        "workspace": "${WORKSPACE_ROOT}",
+        "model": {
+          "primary": "anthropic/claude-sonnet-4-5-20250929"
+        },
+        "subagents": {
+          "allowAgents": [
+            "scout",
+            "oracle",
+            "trigger",
+            "sentinel",
+            "herald"
+          ]
+        },
+        "tools": {
+          "profile": "full"
+        }
+      },
+      {
+        "id": "scout",
+        "name": "Scout",
+        "workspace": "${WORKSPACE_ROOT}/agents/scout",
+        "model": {
+          "primary": "anthropic/claude-haiku-4-5-20251001"
+        },
+        "tools": {
+          "profile": "minimal",
+          "alsoAllow": [
+            "read",
+            "write",
+            "edit",
+            "browser",
+            "web_search",
+            "web_fetch",
+            "memory_search",
+            "memory_get"
+          ]
+        }
+      },
+      {
+        "id": "oracle",
+        "name": "Oracle",
+        "workspace": "${WORKSPACE_ROOT}/agents/oracle",
+        "model": {
+          "primary": "anthropic/claude-sonnet-4-5-20250929"
+        },
+        "tools": {
+          "profile": "minimal",
+          "alsoAllow": [
+            "read",
+            "write",
+            "edit",
+            "memory_search",
+            "memory_get"
+          ]
+        }
+      },
+      {
+        "id": "trigger",
+        "name": "Trigger",
+        "workspace": "${WORKSPACE_ROOT}/agents/trigger",
+        "model": {
+          "primary": "anthropic/claude-sonnet-4-5-20250929"
+        },
+        "tools": {
+          "profile": "minimal",
+          "alsoAllow": [
+            "read",
+            "write",
+            "edit",
+            "memory_search",
+            "memory_get"
+          ]
+        }
+      },
+      {
+        "id": "sentinel",
+        "name": "Sentinel",
+        "workspace": "${WORKSPACE_ROOT}/agents/sentinel",
+        "model": {
+          "primary": "anthropic/claude-haiku-4-5-20251001"
+        },
+        "tools": {
+          "profile": "minimal",
+          "alsoAllow": [
+            "read",
+            "write",
+            "edit",
+            "memory_search",
+            "memory_get"
+          ]
+        }
+      },
+      {
+        "id": "herald",
+        "name": "Herald",
+        "workspace": "${WORKSPACE_ROOT}/agents/herald",
+        "model": {
+          "primary": "anthropic/claude-haiku-4-5-20251001"
+        },
+        "tools": {
+          "profile": "minimal",
+          "alsoAllow": [
+            "read",
+            "write",
+            "edit",
+            "memory_search",
+            "memory_get",
+            "message"
+          ]
+        }
+      }
+    ]
+  }
+}

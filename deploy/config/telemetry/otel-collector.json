@@ -1,0 +1,13 @@
+{
+  "telemetry": {
+    "enabled": true,
+    "exporter": "otlp",
+    "endpoint": "${OTEL_EXPORTER_OTLP_ENDPOINT}",
+    "protocol": "grpc",
+    "metrics": {
+      "openclaw.tokens": true,
+      "openclaw.cost.usd": true,
+      "openclaw.run.duration_ms": true
+    }
+  }
+}

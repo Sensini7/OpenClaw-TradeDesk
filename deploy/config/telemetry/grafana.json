@@ -1,0 +1,13 @@
+{
+  "telemetry": {
+    "enabled": true,
+    "exporter": "otlp",
+    "endpoint": "${GRAFANA_PUSH_URL}",
+    "protocol": "http/protobuf",
+    "metrics": {
+      "openclaw.tokens": true,
+      "openclaw.cost.usd": true,
+      "openclaw.run.duration_ms": true
+    }
+  }
+}

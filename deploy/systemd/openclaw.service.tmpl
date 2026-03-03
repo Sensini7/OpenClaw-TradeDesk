@@ -1,0 +1,27 @@
+[Unit]
+Description=OpenClaw Gateway
+Documentation=https://openclaw.ai/docs
+After=network-online.target ollama.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=$HOME/.openclaw/workspace
+Environment=NODE_ENV=production
+Environment=PATH=$NVM_BIN:$HOME/.local/bin:$HOME/.npm/bin:/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=-$HOME/.openclaw/.env
+ExecStart=$OC_BIN gateway start --foreground
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openclaw
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=$HOME/.openclaw $HOME/.openclaw/workspace
+
+[Install]
+WantedBy=multi-user.target

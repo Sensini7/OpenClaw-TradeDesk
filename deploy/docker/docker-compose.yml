@@ -1,0 +1,40 @@
+version: "3.8"
+
+services:
+  openclaw-gateway:
+    build:
+      context: ../../
+      dockerfile: deploy/docker/Dockerfile
+    container_name: openclaw-gateway
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:18789:18789"
+    volumes:
+      - ${HOME}/.openclaw:/home/node/.openclaw
+    env_file:
+      - ${HOME}/.openclaw/.env
+    depends_on:
+      - ollama
+    networks:
+      - openclaw-net
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: openclaw-ollama
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    profiles:
+      - memory
+    networks:
+      - openclaw-net
+
+volumes:
+  ollama-data:
+    driver: local
+
+networks:
+  openclaw-net:
+    driver: bridge

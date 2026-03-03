@@ -12,3 +12,6 @@ Thumbs.db
 # Secrets (never commit)
 openclaw.json
 .env
+
+# Docker build artifacts
+deploy/docker/*.tar.gz

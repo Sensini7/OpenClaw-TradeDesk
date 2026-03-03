@@ -1,0 +1,19 @@
+{
+  "agents": {
+    "defaults": {
+      "memorySearch": {
+        "enabled": true,
+        "provider": "openai",
+        "model": "text-embedding-3-small",
+        "apiKey": "${OPENAI_API_KEY}",
+        "hybridSearch": {
+          "enabled": true,
+          "keywordWeight": 0.3,
+          "semanticWeight": 0.7
+        },
+        "topK": 10,
+        "minScore": 0.4
+      }
+    }
+  }
+}

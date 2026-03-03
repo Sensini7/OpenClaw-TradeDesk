@@ -1,0 +1,5 @@
+{
+  "gateway": {
+    "bind": "loopback"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "channels": {
+    "whatsapp": {
+      "dmPolicy": "${DM_POLICY}",
+      "provider": "baileys",
+      "streaming": false
+    }
+  },
+  "bindings": [
+    {
+      "agentId": "commander",
+      "match": {
+        "channel": "whatsapp"
+      }
+    }
+  ],
+  "plugins": {
+    "entries": {
+      "whatsapp": {
+        "enabled": true
+      }
+    }
+  }
+}
