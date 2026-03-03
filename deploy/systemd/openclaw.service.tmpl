@@ -21,7 +21,8 @@ SyslogIdentifier=openclaw
 # Security hardening
 NoNewPrivileges=true
 ProtectSystem=strict
-ReadWritePaths=$HOME/.openclaw $HOME/.openclaw/workspace
+PrivateTmp=true
+ReadWritePaths=$HOME/.openclaw $HOME/.openclaw/workspace /tmp
 
 [Install]
 WantedBy=multi-user.target
