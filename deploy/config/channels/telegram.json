@@ -5,7 +5,7 @@
       "botToken": "${TELEGRAM_BOT_TOKEN}",
       "allowFrom": ["${TELEGRAM_USER_ID}"],
       "groupPolicy": "allowlist",
-      "streaming": false
+      "streaming": "off"
     }
   },
   "bindings": [

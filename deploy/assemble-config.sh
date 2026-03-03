@@ -135,16 +135,35 @@ fi
 # Merge telemetry
 merge_fragment "${CONFIG_DIR}/telemetry/${DEPLOY_OTEL_EXPORTER}.json"
 
-# ── Post-processing ──────────────────────────────────────────────────────────
+# ── Post-processing: resolve all ${VAR} placeholders ────────────────────────
+# OpenClaw does NOT natively resolve env vars in all config fields.
+# We must substitute them here before writing the final config.
 
-# Replace ${WORKSPACE_ROOT} placeholder with actual path
-if command -v jq &>/dev/null; then
-  jq --arg wr "$WORKSPACE_ROOT" '
-    walk(if type == "string" then gsub("\\$\\{WORKSPACE_ROOT\\}"; $wr) else . end)
-  ' "$ACCUM" > "${ACCUM}.tmp" && mv "${ACCUM}.tmp" "$ACCUM"
-else
-  sed -i "s|\${WORKSPACE_ROOT}|${WORKSPACE_ROOT}|g" "$ACCUM"
-fi
+declare -A SUBSTITUTIONS=(
+  ["WORKSPACE_ROOT"]="$WORKSPACE_ROOT"
+  ["TELEGRAM_BOT_TOKEN"]="${TELEGRAM_BOT_TOKEN:-}"
+  ["TELEGRAM_USER_ID"]="${TELEGRAM_USER_ID:-}"
+  ["DISCORD_BOT_TOKEN"]="${DISCORD_BOT_TOKEN:-}"
+  ["SLACK_BOT_TOKEN"]="${SLACK_BOT_TOKEN:-}"
+  ["SLACK_APP_TOKEN"]="${SLACK_APP_TOKEN:-}"
+  ["OPENCLAW_GATEWAY_TOKEN"]="${OPENCLAW_GATEWAY_TOKEN:-}"
+  ["OPENCLAW_GATEWAY_PASSWORD"]="${OPENCLAW_GATEWAY_PASSWORD:-}"
+  ["OPENAI_API_KEY"]="${OPENAI_API_KEY:-}"
+  ["WEBHOOK_SECRET"]="${WEBHOOK_SECRET:-}"
+  ["WEBHOOK_URL"]="${WEBHOOK_URL:-}"
+  ["DM_POLICY"]="${DEPLOY_DM_POLICY:-pairing}"
+  ["OTEL_EXPORTER_OTLP_ENDPOINT"]="${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
+  ["DATADOG_API_KEY"]="${DATADOG_API_KEY:-}"
+  ["GRAFANA_PUSH_URL"]="${GRAFANA_PUSH_URL:-}"
+  ["SERVER_NAME"]="${DEPLOY_SERVER_NAME:-_}"
+)
+
+for var in "${!SUBSTITUTIONS[@]}"; do
+  val="${SUBSTITUTIONS[$var]}"
+  if [ -n "$val" ]; then
+    sed -i "s|\${${var}}|${val}|g" "$ACCUM"
+  fi
+done
 
 # ── Write output ─────────────────────────────────────────────────────────────
 mkdir -p "$(dirname "$OUTPUT")"

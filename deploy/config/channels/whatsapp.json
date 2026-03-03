@@ -3,7 +3,7 @@
     "whatsapp": {
       "dmPolicy": "${DM_POLICY}",
       "provider": "baileys",
-      "streaming": false
+      "streaming": "off"
     }
   },
   "bindings": [

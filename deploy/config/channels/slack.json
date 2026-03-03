@@ -5,7 +5,7 @@
       "botToken": "${SLACK_BOT_TOKEN}",
       "appToken": "${SLACK_APP_TOKEN}",
       "socketMode": true,
-      "streaming": false
+      "streaming": "off"
     }
   },
   "bindings": [
