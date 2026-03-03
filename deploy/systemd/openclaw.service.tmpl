@@ -11,7 +11,7 @@ WorkingDirectory=$HOME/.openclaw/workspace
 Environment=NODE_ENV=production
 Environment=PATH=$NVM_BIN:$HOME/.local/bin:$HOME/.npm/bin:/usr/local/bin:/usr/bin:/bin
 EnvironmentFile=-$HOME/.openclaw/.env
-ExecStart=$OC_BIN gateway start --foreground
+ExecStart=$OC_BIN gateway start
 Restart=always
 RestartSec=5
 StandardOutput=journal

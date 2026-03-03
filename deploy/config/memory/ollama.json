@@ -2,9 +2,7 @@
   "agents": {
     "defaults": {
       "memorySearch": {
-        "enabled": true,
-        "provider": "ollama",
-        "model": "nomic-embed-text"
+        "enabled": true
       }
     }
   }

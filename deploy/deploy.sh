@@ -147,26 +147,14 @@ else
   echo "==> [8/14] Skipping doctor (Docker mode)."
 fi
 
-# ── 9. Set up systemd service ────────────────────────────────────────────────
-DEPLOY_PROCESS_MANAGER="${DEPLOY_PROCESS_MANAGER:-systemd}"
-if [ "$DEPLOY_PROCESS_MANAGER" = "systemd" ]; then
-  echo "==> [9/14] Setting up systemd service..."
-  TMPL="${DEPLOY_DIR}/systemd/openclaw.service.tmpl"
-  if [ -f "$TMPL" ]; then
-    # Find the openclaw binary and nvm bin paths
-    OC_BIN="$(command -v openclaw 2>/dev/null || echo "$HOME/.local/bin/openclaw")"
-    NVM_BIN="$(dirname "$(command -v node 2>/dev/null || echo "$HOME/.nvm/versions/node/v22/bin/node")")"
-    export OC_BIN NVM_BIN
-
-    envsubst '$OC_BIN $NVM_BIN $HOME' < "$TMPL" | sudo tee /etc/systemd/system/openclaw.service > /dev/null
-    sudo systemctl daemon-reload
-    sudo systemctl enable openclaw
-    echo "    systemd service installed."
-  else
-    echo "    WARN: systemd template not found at $TMPL"
-  fi
-else
-  echo "==> [9/14] Skipping systemd (process_manager=${DEPLOY_PROCESS_MANAGER})."
+# ── 9. Process management setup ──────────────────────────────────────────────
+DEPLOY_PROCESS_MANAGER="${DEPLOY_PROCESS_MANAGER:-native}"
+echo "==> [9/14] Process management: ${DEPLOY_PROCESS_MANAGER}"
+# Disable any leftover systemd service to avoid conflict with native daemon
+if sudo systemctl is-enabled openclaw 2>/dev/null; then
+  sudo systemctl stop openclaw 2>/dev/null || true
+  sudo systemctl disable openclaw 2>/dev/null || true
+  echo "    Disabled systemd openclaw service (using native daemon)."
 fi
 
 # ── 10. Docker Compose ───────────────────────────────────────────────────────
@@ -214,16 +202,13 @@ fi
 
 # ── 13. Restart gateway ─────────────────────────────────────────────────────
 echo "==> [13/14] Restarting gateway..."
-if [ "$DEPLOY_PROCESS_MANAGER" = "systemd" ]; then
-  sudo systemctl restart openclaw
-  echo "    systemd service restarted."
-elif [ "$DEPLOY_PROCESS_MANAGER" = "docker-compose" ]; then
+if [ "$DEPLOY_PROCESS_MANAGER" = "docker-compose" ]; then
   cd "${DEPLOY_DIR}/docker"
   docker compose restart openclaw-gateway
   cd "$WORKSPACE"
   echo "    Docker container restarted."
 else
-  # Fallback: use openclaw gateway commands
+  # Use OpenClaw's native daemon management
   openclaw gateway install 2>/dev/null || \
     openclaw gateway install-daemon 2>/dev/null || true
   if openclaw gateway restart 2>/dev/null; then
@@ -240,10 +225,7 @@ fi
 echo "==> [14/14] Running health checks..."
 sleep 5
 
-if [ "$DEPLOY_PROCESS_MANAGER" = "systemd" ]; then
-  echo "--- systemd status ---"
-  sudo systemctl is-active openclaw && echo "    Service: ACTIVE" || echo "    Service: INACTIVE"
-elif [ "$DEPLOY_PROCESS_MANAGER" = "docker-compose" ]; then
+if [ "$DEPLOY_PROCESS_MANAGER" = "docker-compose" ]; then
   echo "--- Docker status ---"
   cd "${DEPLOY_DIR}/docker"
   docker compose ps

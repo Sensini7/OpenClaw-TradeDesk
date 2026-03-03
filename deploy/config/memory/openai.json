@@ -2,10 +2,7 @@
   "agents": {
     "defaults": {
       "memorySearch": {
-        "enabled": true,
-        "provider": "openai",
-        "model": "text-embedding-3-small",
-        "apiKey": "${OPENAI_API_KEY}"
+        "enabled": true
       }
     }
   }
